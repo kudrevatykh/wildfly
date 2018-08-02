@@ -31,8 +31,9 @@
 
     <dependencies>
         <module name="javax.api"/>
+        <module name="javax.transaction.api"/>
         <module name="com.google.protobuf" optional="true"/>
-        <module name="org.apache.commons.pool"/>
+        <module name="io.netty"/>
         <module name="org.infinispan.commons"/>
         <module name="org.jboss.logging"/>
     </dependencies>

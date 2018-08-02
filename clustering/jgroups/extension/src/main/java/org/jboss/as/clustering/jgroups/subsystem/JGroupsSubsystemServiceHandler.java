@@ -23,16 +23,17 @@
 package org.jboss.as.clustering.jgroups.subsystem;
 
 import static org.jboss.as.clustering.jgroups.logging.JGroupsLogger.ROOT_LOGGER;
-import static org.jboss.as.clustering.jgroups.subsystem.JGroupsSubsystemResourceDefinition.Attribute.DEFAULT_CHANNEL;
 import static org.jboss.as.clustering.jgroups.subsystem.JGroupsSubsystemResourceDefinition.CAPABILITIES;
 import static org.jboss.as.clustering.jgroups.subsystem.JGroupsSubsystemResourceDefinition.CLUSTERING_CAPABILITIES;
+import static org.jboss.as.clustering.jgroups.subsystem.JGroupsSubsystemResourceDefinition.Attribute.DEFAULT_CHANNEL;
 
+import java.util.Map;
 import java.util.ServiceLoader;
 
-import org.jboss.as.clustering.controller.CapabilityServiceBuilder;
+import org.jboss.as.clustering.controller.Capability;
+import org.jboss.as.clustering.controller.CapabilityServiceConfigurator;
 import org.jboss.as.clustering.controller.ResourceServiceHandler;
-import org.jboss.as.clustering.dmr.ModelNodes;
-import org.jboss.as.clustering.naming.BinderServiceBuilder;
+import org.jboss.as.clustering.naming.BinderServiceConfigurator;
 import org.jboss.as.clustering.naming.JndiNameFactory;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
@@ -43,9 +44,12 @@ import org.jboss.dmr.ModelNode;
 import org.jboss.msc.service.ServiceTarget;
 import org.jgroups.Version;
 import org.wildfly.clustering.jgroups.spi.JGroupsRequirement;
-import org.wildfly.clustering.service.AliasServiceBuilder;
+import org.wildfly.clustering.service.IdentityServiceConfigurator;
 import org.wildfly.clustering.service.ServiceNameProvider;
-import org.wildfly.clustering.spi.GroupAliasBuilderProvider;
+import org.wildfly.clustering.spi.CapabilityServiceNameRegistry;
+import org.wildfly.clustering.spi.ClusteringRequirement;
+import org.wildfly.clustering.spi.IdentityGroupServiceConfiguratorProvider;
+import org.wildfly.clustering.spi.ServiceNameRegistry;
 
 /**
  * @author Paul Ferraro
@@ -72,31 +76,39 @@ public class JGroupsSubsystemServiceHandler implements ResourceServiceHandler {
             }
         }
 
-        new ProtocolDefaultsBuilder().build(target).install();
+        new ProtocolDefaultsServiceConfigurator().build(target).install();
 
-        ModelNodes.optionalString(DEFAULT_CHANNEL.resolveModelAttribute(context, model)).ifPresent(defaultChannel -> {
-            CAPABILITIES.entrySet().forEach(entry -> new AliasServiceBuilder<>(entry.getValue().getServiceName(address), entry.getKey().getServiceName(context, defaultChannel), entry.getKey().getType()).build(target).install());
+        String defaultChannel = DEFAULT_CHANNEL.resolveModelAttribute(context, model).asStringOrNull();
+        if (defaultChannel != null) {
+            for (Map.Entry<JGroupsRequirement, Capability> entry : CAPABILITIES.entrySet()) {
+                new IdentityServiceConfigurator<>(entry.getValue().getServiceName(address), entry.getKey().getServiceName(context, defaultChannel)).build(target).install();
+            }
 
             if (!defaultChannel.equals(JndiNameFactory.DEFAULT_LOCAL_NAME)) {
-                new BinderServiceBuilder<>(JGroupsBindingFactory.createChannelBinding(JndiNameFactory.DEFAULT_LOCAL_NAME), JGroupsRequirement.CHANNEL.getServiceName(context, defaultChannel), JGroupsRequirement.CHANNEL.getType()).build(target).install();
-                new BinderServiceBuilder<>(JGroupsBindingFactory.createChannelFactoryBinding(JndiNameFactory.DEFAULT_LOCAL_NAME), JGroupsRequirement.CHANNEL_FACTORY.getServiceName(context, defaultChannel), JGroupsRequirement.CHANNEL_FACTORY.getType()).build(target).install();
+                new BinderServiceConfigurator(JGroupsBindingFactory.createChannelBinding(JndiNameFactory.DEFAULT_LOCAL_NAME), JGroupsRequirement.CHANNEL.getServiceName(context, defaultChannel)).build(target).install();
+                new BinderServiceConfigurator(JGroupsBindingFactory.createChannelFactoryBinding(JndiNameFactory.DEFAULT_LOCAL_NAME), JGroupsRequirement.CHANNEL_FACTORY.getServiceName(context, defaultChannel)).build(target).install();
             }
 
-            for (GroupAliasBuilderProvider provider : ServiceLoader.load(GroupAliasBuilderProvider.class, GroupAliasBuilderProvider.class.getClassLoader())) {
-                for (CapabilityServiceBuilder<?> builder : provider.getBuilders(requirement -> CLUSTERING_CAPABILITIES.get(requirement).getServiceName(address), null, defaultChannel)) {
-                    builder.configure(context).build(target).install();
+            ServiceNameRegistry<ClusteringRequirement> registry = new CapabilityServiceNameRegistry<>(CLUSTERING_CAPABILITIES, address);
+
+            for (IdentityGroupServiceConfiguratorProvider provider : ServiceLoader.load(IdentityGroupServiceConfiguratorProvider.class, IdentityGroupServiceConfiguratorProvider.class.getClassLoader())) {
+                for (CapabilityServiceConfigurator configurator : provider.getServiceConfigurators(registry, null, defaultChannel)) {
+                    configurator.configure(context).build(target).install();
                 }
             }
-        });
+        }
     }
 
     @Override
     public void removeServices(OperationContext context, ModelNode model) throws OperationFailedException {
         PathAddress address = context.getCurrentAddress();
-        ModelNodes.optionalString(DEFAULT_CHANNEL.resolveModelAttribute(context, model)).ifPresent(defaultChannel -> {
-            for (GroupAliasBuilderProvider provider : ServiceLoader.load(GroupAliasBuilderProvider.class, GroupAliasBuilderProvider.class.getClassLoader())) {
-                for (ServiceNameProvider builder : provider.getBuilders(requirement -> JGroupsSubsystemResourceDefinition.CLUSTERING_CAPABILITIES.get(requirement).getServiceName(address), null, defaultChannel)) {
-                    context.removeService(builder.getServiceName());
+        String defaultChannel = DEFAULT_CHANNEL.resolveModelAttribute(context, model).asStringOrNull();
+        if (defaultChannel != null) {
+            ServiceNameRegistry<ClusteringRequirement> registry = new CapabilityServiceNameRegistry<>(CLUSTERING_CAPABILITIES, address);
+
+            for (IdentityGroupServiceConfiguratorProvider provider : ServiceLoader.load(IdentityGroupServiceConfiguratorProvider.class, IdentityGroupServiceConfiguratorProvider.class.getClassLoader())) {
+                for (ServiceNameProvider configurator : provider.getServiceConfigurators(registry, null, defaultChannel)) {
+                    context.removeService(configurator.getServiceName());
                 }
             }
 
@@ -105,9 +117,11 @@ public class JGroupsSubsystemServiceHandler implements ResourceServiceHandler {
                 context.removeService(JGroupsBindingFactory.createChannelBinding(JndiNameFactory.DEFAULT_LOCAL_NAME).getBinderServiceName());
             }
 
-            CAPABILITIES.values().forEach(capability -> context.removeService(capability.getServiceName(address)));
-        });
+            for (Capability capability : CAPABILITIES.values()) {
+                context.removeService(capability.getServiceName(address));
+            }
+        }
 
-        context.removeService(ProtocolDefaultsBuilder.SERVICE_NAME);
+        context.removeService(ProtocolDefaultsServiceConfigurator.SERVICE_NAME);
     }
 }

@@ -55,8 +55,6 @@ import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.operations.common.Util;
 import org.jboss.as.controller.operations.global.ListOperations;
 import org.jboss.as.controller.registry.AttributeAccess;
-import org.jboss.as.controller.transform.description.DiscardAttributeChecker;
-import org.jboss.as.controller.transform.description.RejectAttributeChecker;
 import org.jboss.as.controller.transform.description.ResourceTransformationDescriptionBuilder;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
@@ -98,12 +96,16 @@ public class CacheContainerResourceDefinition extends ChildResourceDefinition<Ma
 
     static final Map<InfinispanCacheRequirement, org.jboss.as.clustering.controller.Capability> DEFAULT_CAPABILITIES = new EnumMap<>(InfinispanCacheRequirement.class);
     static {
-        EnumSet.allOf(InfinispanCacheRequirement.class).forEach(requirement -> DEFAULT_CAPABILITIES.put(requirement, new UnaryRequirementCapability(requirement.getDefaultRequirement())));
+        for (InfinispanCacheRequirement requirement : EnumSet.allOf(InfinispanCacheRequirement.class)) {
+            DEFAULT_CAPABILITIES.put(requirement, new UnaryRequirementCapability(requirement.getDefaultRequirement()));
+        }
     }
 
     static final Map<ClusteringCacheRequirement, org.jboss.as.clustering.controller.Capability> DEFAULT_CLUSTERING_CAPABILITIES = new EnumMap<>(ClusteringCacheRequirement.class);
     static {
-        EnumSet.allOf(ClusteringCacheRequirement.class).forEach(requirement -> DEFAULT_CLUSTERING_CAPABILITIES.put(requirement, new UnaryRequirementCapability(requirement.getDefaultRequirement())));
+        for (ClusteringCacheRequirement requirement : EnumSet.allOf(ClusteringCacheRequirement.class)) {
+            DEFAULT_CLUSTERING_CAPABILITIES.put(requirement, new UnaryRequirementCapability(requirement.getDefaultRequirement()));
+        }
     }
 
     @Deprecated
@@ -123,17 +125,33 @@ public class CacheContainerResourceDefinition extends ChildResourceDefinition<Ma
             .setDeprecated(InfinispanModel.VERSION_3_0_0.getVersion())
             .build();
 
-    enum Attribute implements org.jboss.as.clustering.controller.Attribute {
+    enum Attribute implements org.jboss.as.clustering.controller.Attribute, UnaryOperator<SimpleAttributeDefinitionBuilder> {
         ALIASES("aliases"),
-        DEFAULT_CACHE("default-cache", ModelType.STRING, builder -> builder.setAllowExpression(false).setCapabilityReference(new CapabilityReference(DEFAULT_CAPABILITIES.get(InfinispanCacheRequirement.CONFIGURATION), InfinispanCacheRequirement.CONFIGURATION))),
-        MODULE("module", ModelType.STRING, builder -> builder.setDefaultValue(new ModelNode("org.jboss.as.clustering.infinispan")).setValidator(new ModuleIdentifierValidatorBuilder().configure(builder).build())),
-        JNDI_NAME("jndi-name", ModelType.STRING, UnaryOperator.identity()),
-        STATISTICS_ENABLED("statistics-enabled", ModelType.BOOLEAN, builder -> builder.setDefaultValue(new ModelNode(false))),
+        DEFAULT_CACHE("default-cache", ModelType.STRING) {
+            @Override
+            public SimpleAttributeDefinitionBuilder apply(SimpleAttributeDefinitionBuilder builder) {
+                return builder.setAllowExpression(false).setCapabilityReference(new CapabilityReference(DEFAULT_CAPABILITIES.get(InfinispanCacheRequirement.CONFIGURATION), InfinispanCacheRequirement.CONFIGURATION, WILDCARD_PATH));
+            }
+        },
+        MODULE("module", ModelType.STRING) {
+            @Override
+            public SimpleAttributeDefinitionBuilder apply(SimpleAttributeDefinitionBuilder builder) {
+                return builder.setDefaultValue(new ModelNode("org.jboss.as.clustering.infinispan"))
+                        .setValidator(new ModuleIdentifierValidatorBuilder().configure(builder).build())
+                        ;
+            }
+        },
+        STATISTICS_ENABLED("statistics-enabled", ModelType.BOOLEAN) {
+            @Override
+            public SimpleAttributeDefinitionBuilder apply(SimpleAttributeDefinitionBuilder builder) {
+                return builder.setDefaultValue(new ModelNode(false));
+            }
+        },
         ;
         private final AttributeDefinition definition;
 
-        Attribute(String name, ModelType type, UnaryOperator<SimpleAttributeDefinitionBuilder> configurator) {
-            this.definition = configurator.apply(createBuilder(name, type)).build();
+        Attribute(String name, ModelType type) {
+            this.definition = this.apply(createBuilder(name, type)).build();
         }
 
         Attribute(String name) {
@@ -146,6 +164,11 @@ public class CacheContainerResourceDefinition extends ChildResourceDefinition<Ma
         @Override
         public AttributeDefinition getDefinition() {
             return this.definition;
+        }
+
+        @Override
+        public SimpleAttributeDefinitionBuilder apply(SimpleAttributeDefinitionBuilder builder) {
+            return builder;
         }
     }
 
@@ -168,18 +191,31 @@ public class CacheContainerResourceDefinition extends ChildResourceDefinition<Ma
     }
 
     @Deprecated
-    enum DeprecatedAttribute implements org.jboss.as.clustering.controller.Attribute {
-        START("start", ModelType.STRING, builder -> builder.setDefaultValue(new ModelNode(StartMode.LAZY.name())).setValidator(new EnumValidator<>(StartMode.class)), InfinispanModel.VERSION_3_0_0),
+    enum DeprecatedAttribute implements org.jboss.as.clustering.controller.Attribute, UnaryOperator<SimpleAttributeDefinitionBuilder> {
+        JNDI_NAME("jndi-name", ModelType.STRING, InfinispanModel.VERSION_6_0_0),
+        START("start", ModelType.STRING, InfinispanModel.VERSION_3_0_0) {
+            @Override
+            public SimpleAttributeDefinitionBuilder apply(SimpleAttributeDefinitionBuilder builder) {
+                return builder.setDefaultValue(new ModelNode(StartMode.LAZY.name()))
+                        .setValidator(new EnumValidator<>(StartMode.class))
+                        ;
+            }
+        },
         ;
         private final AttributeDefinition definition;
 
-        DeprecatedAttribute(String name, ModelType type, UnaryOperator<SimpleAttributeDefinitionBuilder> configurator, InfinispanModel deprecation) {
-            this.definition = configurator.apply(createBuilder(name, type)).setDeprecated(deprecation.getVersion()).build();
+        DeprecatedAttribute(String name, ModelType type, InfinispanModel deprecation) {
+            this.definition = this.apply(createBuilder(name, type)).setDeprecated(deprecation.getVersion()).build();
         }
 
         @Override
         public AttributeDefinition getDefinition() {
             return this.definition;
+        }
+
+        @Override
+        public SimpleAttributeDefinitionBuilder apply(SimpleAttributeDefinitionBuilder builder) {
+            return builder;
         }
     }
 
@@ -195,15 +231,19 @@ public class CacheContainerResourceDefinition extends ChildResourceDefinition<Ma
         ResourceTransformationDescriptionBuilder builder = parent.addChildResource(WILDCARD_PATH);
 
         if (InfinispanModel.VERSION_4_0_0.requiresTransformation(version)) {
-            builder.discardChildResource(NoTransportResourceDefinition.PATH);
-
-            EnumSet.allOf(ThreadPoolResourceDefinition.class).forEach(pool -> builder.addChildResource(pool.getPathElement(), pool.getDiscardPolicy()));
-            EnumSet.allOf(ScheduledThreadPoolResourceDefinition.class).forEach(pool -> builder.addChildResource(pool.getPathElement(), pool.getDiscardPolicy()));
+            for (ThreadPoolResourceDefinition pool : EnumSet.complementOf(EnumSet.of(ThreadPoolResourceDefinition.CLIENT))) {
+                builder.addChildResource(pool.getPathElement(), pool.getDiscardPolicy());
+            }
+            for (ScheduledThreadPoolResourceDefinition pool : EnumSet.allOf(ScheduledThreadPoolResourceDefinition.class)) {
+                builder.addChildResource(pool.getPathElement(), pool.getDiscardPolicy());
+            }
         } else {
-            NoTransportResourceDefinition.buildTransformation(version, builder);
-
-            EnumSet.allOf(ThreadPoolResourceDefinition.class).forEach(pool -> pool.buildTransformation(version, parent));
-            EnumSet.allOf(ScheduledThreadPoolResourceDefinition.class).forEach(pool -> pool.buildTransformation(version, parent));
+            for (ThreadPoolResourceDefinition pool : EnumSet.complementOf(EnumSet.of(ThreadPoolResourceDefinition.CLIENT))) {
+                pool.buildTransformation(version, parent);
+            }
+            for (ScheduledThreadPoolResourceDefinition pool : EnumSet.allOf(ScheduledThreadPoolResourceDefinition.class)) {
+                pool.buildTransformation(version, parent);
+            }
         }
 
         if (InfinispanModel.VERSION_3_0_0.requiresTransformation(version)) {
@@ -240,17 +280,10 @@ public class CacheContainerResourceDefinition extends ChildResourceDefinition<Ma
             builder.addRawOperationTransformationOverride(ListOperations.LIST_REMOVE_DEFINITION.getName(), new SimpleOperationTransformer(removeAliasTransformer));
         }
 
-        if (InfinispanModel.VERSION_1_5_0.requiresTransformation(version)) {
-            builder.getAttributeBuilder()
-                    // discard statistics if set to true, reject otherwise
-                    .setDiscard(new DiscardAttributeChecker.DiscardAttributeValueChecker(false, false, new ModelNode(true)), Attribute.STATISTICS_ENABLED.getDefinition())
-                    .addRejectCheck(RejectAttributeChecker.UNDEFINED, Attribute.STATISTICS_ENABLED.getDefinition())
-                    .addRejectCheck(RejectAttributeChecker.SIMPLE_EXPRESSIONS, Attribute.STATISTICS_ENABLED.getDefinition())
-                    .addRejectCheck(new RejectAttributeChecker.SimpleRejectAttributeChecker(new ModelNode(false)), Attribute.STATISTICS_ENABLED.getDefinition());
-        }
-
+        NoTransportResourceDefinition.buildTransformation(version, builder);
         JGroupsTransportResourceDefinition.buildTransformation(version, builder);
 
+        ScatteredCacheResourceDefinition.buildTransformation(version, builder);
         DistributedCacheResourceDefinition.buildTransformation(version, builder);
         ReplicatedCacheResourceDefinition.buildTransformation(version, builder);
         InvalidationCacheResourceDefinition.buildTransformation(version, builder);
@@ -262,8 +295,8 @@ public class CacheContainerResourceDefinition extends ChildResourceDefinition<Ma
     }
 
     @Override
-    public void register(ManagementResourceRegistration parentRegistration) {
-        ManagementResourceRegistration registration = parentRegistration.registerSubModel(this);
+    public ManagementResourceRegistration register(ManagementResourceRegistration parent) {
+        ManagementResourceRegistration registration = parent.registerSubModel(this);
 
         ResourceDescriptor descriptor = new ResourceDescriptor(this.getResourceDescriptionResolver())
                 .addAttributes(Attribute.class)
@@ -272,7 +305,7 @@ public class CacheContainerResourceDefinition extends ChildResourceDefinition<Ma
                 .addCapabilities(Capability.class)
                 .addCapabilities(model -> model.hasDefined(Attribute.DEFAULT_CACHE.getName()), DEFAULT_CAPABILITIES.values())
                 .addCapabilities(model -> model.hasDefined(Attribute.DEFAULT_CACHE.getName()), DEFAULT_CLUSTERING_CAPABILITIES.values())
-                .addRequiredChildren(ThreadPoolResourceDefinition.class)
+                .addRequiredChildren(EnumSet.complementOf(EnumSet.of(ThreadPoolResourceDefinition.CLIENT)))
                 .addRequiredChildren(ScheduledThreadPoolResourceDefinition.class)
                 .addRequiredSingletonChildren(NoTransportResourceDefinition.PATH)
                 ;
@@ -308,12 +341,19 @@ public class CacheContainerResourceDefinition extends ChildResourceDefinition<Ma
         new JGroupsTransportResourceDefinition().register(registration);
         new NoTransportResourceDefinition().register(registration);
 
-        EnumSet.allOf(ThreadPoolResourceDefinition.class).forEach(p -> p.register(registration));
-        EnumSet.allOf(ScheduledThreadPoolResourceDefinition.class).forEach(p -> p.register(registration));
+        for (ThreadPoolResourceDefinition pool : EnumSet.complementOf(EnumSet.of(ThreadPoolResourceDefinition.CLIENT))) {
+            pool.register(registration);
+        }
+        for (ScheduledThreadPoolResourceDefinition pool : EnumSet.allOf(ScheduledThreadPoolResourceDefinition.class)) {
+            pool.register(registration);
+        }
 
         new LocalCacheResourceDefinition().register(registration);
         new InvalidationCacheResourceDefinition().register(registration);
         new ReplicatedCacheResourceDefinition().register(registration);
         new DistributedCacheResourceDefinition().register(registration);
+        new ScatteredCacheResourceDefinition().register(registration);
+
+        return registration;
     }
 }

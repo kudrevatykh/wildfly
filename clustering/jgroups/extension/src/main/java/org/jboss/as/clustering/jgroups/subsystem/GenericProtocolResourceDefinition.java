@@ -23,23 +23,21 @@
 package org.jboss.as.clustering.jgroups.subsystem;
 
 import java.util.EnumSet;
-import java.util.function.Consumer;
+import java.util.function.UnaryOperator;
 
 import org.jboss.as.clustering.controller.ResourceDescriptor;
-import org.jboss.as.clustering.controller.ResourceServiceBuilderFactory;
+import org.jboss.as.clustering.controller.ResourceServiceConfiguratorFactory;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.registry.AttributeAccess;
+import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.dmr.ModelType;
-import org.jgroups.stack.Protocol;
-import org.wildfly.clustering.jgroups.spi.ChannelFactory;
-import org.wildfly.clustering.jgroups.spi.ProtocolConfiguration;
 
 /**
  * @author Paul Ferraro
  */
-public class GenericProtocolResourceDefinition<P extends Protocol> extends ProtocolResourceDefinition<P> {
+public class GenericProtocolResourceDefinition extends ProtocolResourceDefinition {
 
     public static PathElement pathElement(String name) {
         return ProtocolResourceDefinition.pathElement(String.join(".", org.jgroups.conf.ProtocolConfiguration.protocol_prefix, name));
@@ -65,20 +63,40 @@ public class GenericProtocolResourceDefinition<P extends Protocol> extends Proto
         }
     }
 
-    GenericProtocolResourceDefinition(Consumer<ResourceDescriptor> descriptorConfigurator, ResourceServiceBuilderFactory<ProtocolConfiguration<P>> builderFactory, ResourceServiceBuilderFactory<ChannelFactory> parentBuilderFactory) {
-        this(WILDCARD_PATH, descriptorConfigurator, builderFactory, parentBuilderFactory);
+    private static class ResourceDescriptorConfigurator implements UnaryOperator<ResourceDescriptor> {
+        private final UnaryOperator<ResourceDescriptor> configurator;
+
+        ResourceDescriptorConfigurator(UnaryOperator<ResourceDescriptor> configurator) {
+            this.configurator = configurator;
+        }
+
+        @Override
+        public ResourceDescriptor apply(ResourceDescriptor descriptor) {
+            return this.configurator.apply(descriptor).addExtraParameters(DeprecatedAttribute.class);
+        }
     }
 
-    GenericProtocolResourceDefinition(String name, JGroupsModel deprecation, ResourceServiceBuilderFactory<ProtocolConfiguration<P>> builderFactory, Consumer<ResourceDescriptor> descriptorConfigurator, ResourceServiceBuilderFactory<ChannelFactory> parentBuilderFactory) {
-        this(pathElement(name), descriptorConfigurator, builderFactory, parentBuilderFactory);
+    GenericProtocolResourceDefinition(UnaryOperator<ResourceDescriptor> configurator, ResourceServiceConfiguratorFactory parentServiceConfiguratorFactory) {
+        this(WILDCARD_PATH, configurator, parentServiceConfiguratorFactory);
+    }
+
+    GenericProtocolResourceDefinition(String name, JGroupsModel deprecation, UnaryOperator<ResourceDescriptor> configurator, ResourceServiceConfiguratorFactory parentServiceConfiguratorFactory) {
+        this(pathElement(name), configurator, parentServiceConfiguratorFactory);
         this.setDeprecated(deprecation.getVersion());
     }
 
-    private GenericProtocolResourceDefinition(PathElement path, Consumer<ResourceDescriptor> descriptorConfigurator, ResourceServiceBuilderFactory<ProtocolConfiguration<P>> builderFactory, ResourceServiceBuilderFactory<ChannelFactory> parentBuilderFactory) {
-        super(path, descriptorConfigurator.andThen(descriptor -> descriptor
-                .addExtraParameters(DeprecatedAttribute.class)
-                ), builderFactory, parentBuilderFactory, (parent, registration) -> {
-                    EnumSet.allOf(DeprecatedAttribute.class).forEach(attribute -> registration.registerReadOnlyAttribute(attribute.getDefinition(), null));
-                });
+    private GenericProtocolResourceDefinition(PathElement path, UnaryOperator<ResourceDescriptor> configurator, ResourceServiceConfiguratorFactory parentServiceConfiguratorFactory) {
+        super(path, new ResourceDescriptorConfigurator(configurator), ProtocolConfigurationServiceConfigurator::new, parentServiceConfiguratorFactory);
+    }
+
+    @Override
+    public ManagementResourceRegistration register(ManagementResourceRegistration parent) {
+        ManagementResourceRegistration registration = super.register(parent);
+
+        for (org.jboss.as.clustering.controller.Attribute attribute : EnumSet.allOf(DeprecatedAttribute.class)) {
+            registration.registerReadOnlyAttribute(attribute.getDefinition(), null);
+        }
+
+        return registration;
     }
 }

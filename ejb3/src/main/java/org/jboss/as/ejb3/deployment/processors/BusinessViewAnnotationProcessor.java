@@ -193,6 +193,7 @@ public class BusinessViewAnnotationProcessor implements DeploymentUnitProcessor 
             }
             return interfaces;
         }
+
         return Arrays.asList(localViews);
     }
 

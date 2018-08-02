@@ -43,8 +43,6 @@ import javax.ejb.EJBLocalObject;
 import javax.ejb.TimerService;
 import javax.ejb.TransactionAttributeType;
 import javax.ejb.TransactionManagementType;
-import javax.transaction.TransactionManager;
-import javax.transaction.TransactionSynchronizationRegistry;
 import javax.transaction.UserTransaction;
 
 import org.jboss.as.controller.capability.CapabilityServiceSupport;
@@ -82,7 +80,6 @@ import org.jboss.as.ejb3.deployment.EjbDeploymentAttachmentKeys;
 import org.jboss.as.ejb3.deployment.EjbJarDescription;
 import org.jboss.as.ejb3.deployment.ModuleDeployment;
 import org.jboss.as.ejb3.logging.EjbLogger;
-import org.jboss.as.ejb3.remote.EJBRemoteTransactionsViewConfigurator;
 import org.jboss.as.ejb3.security.ApplicationSecurityDomainConfig;
 import org.jboss.as.ejb3.security.EJBMethodSecurityAttribute;
 import org.jboss.as.ejb3.security.EJBSecurityViewConfigurator;
@@ -301,8 +298,7 @@ public abstract class EJBComponentDescription extends ComponentDescription {
         getConfigurators().add(new EjbJarConfigurationConfigurator());
         getConfigurators().add(new SecurityDomainDependencyConfigurator(this));
 
-        // setup a dependency on the EJBUtilities service
-        this.addDependency(EJBUtilities.SERVICE_NAME, ServiceBuilder.DependencyType.REQUIRED);
+
         // setup a current invocation interceptor
         this.addCurrentInvocationContextFactory();
         // setup a dependency on EJB remote tx repository service, if this EJB exposes at least one remote view
@@ -315,7 +311,7 @@ public abstract class EJBComponentDescription extends ComponentDescription {
 
         //add a dependency on the module deployment service
         //we need to make sure this is up before the EJB starts, so that remote invocations are available
-        addDependency(deploymentUnitServiceName.append(ModuleDeployment.SERVICE_NAME), ServiceBuilder.DependencyType.REQUIRED);
+        addDependency(deploymentUnitServiceName.append(ModuleDeployment.SERVICE_NAME));
 
         getConfigurators().addFirst(EJBValidationConfigurator.INSTANCE);
         getConfigurators().add(new ComponentConfigurator() {
@@ -501,8 +497,6 @@ public abstract class EJBComponentDescription extends ComponentDescription {
                     }
                 });
             }
-            // add the remote tx propagating interceptor
-            view.getConfigurators().add(new EJBRemoteTransactionsViewConfigurator());
         }
 
     }
@@ -570,11 +564,11 @@ public abstract class EJBComponentDescription extends ComponentDescription {
                     @Override
                     public void configureDependency(final ServiceBuilder<?> serviceBuilder, final EJBComponentCreateService ejbComponentCreateService) throws DeploymentUnitProcessingException {
                         // add dependency on transaction manager
-                        serviceBuilder.addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER, TransactionManager.class, ejbComponentCreateService.getTransactionManagerInjector());
+                        serviceBuilder.addDependency(TxnServices.JBOSS_TXN_TRANSACTION_MANAGER);
                         // add dependency on UserTransaction
                         serviceBuilder.addDependency(TxnServices.JBOSS_TXN_USER_TRANSACTION, UserTransaction.class, ejbComponentCreateService.getUserTransactionInjector());
                         // add dependency on TransactionSynchronizationRegistry
-                        serviceBuilder.addDependency(TxnServices.JBOSS_TXN_SYNCHRONIZATION_REGISTRY, TransactionSynchronizationRegistry.class, ejbComponentCreateService.getTransactionSynchronizationRegistryInjector());
+                        serviceBuilder.addDependency(TxnServices.JBOSS_TXN_SYNCHRONIZATION_REGISTRY);
                     }
                 });
 

@@ -45,13 +45,13 @@ public class SimpleServlet extends HttpServlet {
     public static final String HEADER_SERIALIZED = "serialized";
     public static final String VALUE_HEADER = "value";
     public static final String SESSION_ID_HEADER = "sessionId";
-    private static final String ATTRIBUTE = "test";
+    public static final String ATTRIBUTE = "test";
 
     public static URI createURI(URL baseURL) throws URISyntaxException {
         return createURI(baseURL.toURI());
     }
 
-    public static URI createURI(URI baseURI) throws URISyntaxException {
+    public static URI createURI(URI baseURI) {
         return baseURI.resolve(SERVLET_NAME);
     }
 
@@ -59,7 +59,7 @@ public class SimpleServlet extends HttpServlet {
         return createURI(baseURL.toURI(), requestDuration);
     }
 
-    public static URI createURI(URI baseURI, int requestDuration) throws URISyntaxException {
+    public static URI createURI(URI baseURI, int requestDuration) {
         return baseURI.resolve(SERVLET_NAME + '?' + REQUEST_DURATION_PARAM + '=' + requestDuration);
     }
 

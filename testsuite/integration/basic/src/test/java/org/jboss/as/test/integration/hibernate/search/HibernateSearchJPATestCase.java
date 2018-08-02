@@ -21,15 +21,21 @@
  */
 package org.jboss.as.test.integration.hibernate.search;
 
+import static org.jboss.as.test.shared.PermissionUtils.createPermissionsXmlAsset;
 import static org.junit.Assert.assertEquals;
 
 import javax.ejb.EJB;
+
+import org.hibernate.search.SearchFactory;
+import org.hibernate.search.engine.impl.MutableSearchFactory;
 
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
+
+import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -55,6 +61,13 @@ public class HibernateSearchJPATestCase {
         assertEquals(1, searchBean.findByKeyword("mars").size());
     }
 
+    @Test
+    public void testCustomConfigurationApplied() {
+        SearchFactory searchFactory = searchBean.retrieveHibernateSearchEngine();
+        MutableSearchFactory internalSearchEngine = searchFactory.unwrap( MutableSearchFactory.class );
+        Assert.assertTrue(internalSearchEngine.isIndexUninvertingAllowed());
+    }
+
     @Deployment
     public static Archive<?> deploy() throws Exception {
 
@@ -63,6 +76,10 @@ public class HibernateSearchJPATestCase {
         jar.addAsManifestResource(HibernateSearchJPATestCase.class.getPackage(), "persistence.xml", "persistence.xml");
         // add testing Bean and entities
         jar.addClasses(SearchBean.class, Book.class, HibernateSearchJPATestCase.class);
+        // WFLY-10195: temporary - should be possible to remove after upgrade to Lucene 6
+        jar.addAsManifestResource(createPermissionsXmlAsset(
+                new RuntimePermission("accessDeclaredMembers")
+        ), "permissions.xml");
 
         return jar;
     }

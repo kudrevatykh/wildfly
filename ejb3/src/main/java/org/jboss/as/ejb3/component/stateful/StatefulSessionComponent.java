@@ -40,12 +40,14 @@ import javax.ejb.TimerService;
 
 import org.jboss.as.ee.component.BasicComponentInstance;
 import org.jboss.as.ee.component.ComponentInstance;
+import org.jboss.as.ee.component.ComponentIsStoppedException;
 import org.jboss.as.ee.component.ComponentView;
 import org.jboss.as.ejb3.cache.Cache;
 import org.jboss.as.ejb3.cache.CacheFactory;
 import org.jboss.as.ejb3.cache.StatefulObjectFactory;
 import org.jboss.as.ejb3.component.DefaultAccessTimeoutService;
 import org.jboss.as.ejb3.component.EJBBusinessMethod;
+import org.jboss.as.ejb3.component.EJBComponentUnavailableException;
 import org.jboss.as.ejb3.component.allowedmethods.AllowedMethodsInformation;
 import org.jboss.as.ejb3.component.session.SessionBeanComponent;
 import org.jboss.as.ejb3.concurrency.AccessTimeoutDetails;
@@ -75,8 +77,6 @@ import org.wildfly.security.manager.WildFlySecurityManager;
  * @author <a href="mailto:cdewolf@redhat.com">Carlo de Wolf</a>
  */
 public class StatefulSessionComponent extends SessionBeanComponent implements StatefulObjectFactory<StatefulSessionComponentInstance>, PassivationListener<StatefulSessionComponentInstance>, IdentifierFactory<SessionID> {
-
-    public static final Object SESSION_ID_REFERENCE_KEY = new Object();
 
     private volatile Cache<SessionID, StatefulSessionComponentInstance> cache;
 
@@ -253,7 +253,7 @@ public class StatefulSessionComponent extends SessionBeanComponent implements St
         } else {
             try {
                 RunResult result = controlPoint.beginRequest();
-                if(result == RunResult.REJECTED) {
+                if (result == RunResult.REJECTED) {
                     throw EjbLogger.ROOT_LOGGER.containerSuspended();
                 }
                 try {
@@ -261,6 +261,8 @@ public class StatefulSessionComponent extends SessionBeanComponent implements St
                 } finally {
                     controlPoint.requestComplete();
                 }
+            } catch (EJBComponentUnavailableException | ComponentIsStoppedException e) {
+                throw e;
             } catch (Exception e) {
                 throw new EJBException(e);
             }
@@ -332,8 +334,8 @@ public class StatefulSessionComponent extends SessionBeanComponent implements St
     }
 
     @Override
-    public void start() {
-        super.start();
+    public void init() {
+        super.init();
 
         this.cache = this.cacheFactory.getValue().createCache(this, this, this);
         this.cache.start();
@@ -413,10 +415,5 @@ public class StatefulSessionComponent extends SessionBeanComponent implements St
             }
         }
         return false;
-    }
-
-    @Override
-    protected void waitForComponentStart() {
-        super.waitForComponentStart();
     }
 }

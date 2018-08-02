@@ -27,17 +27,14 @@ import org.infinispan.Cache;
 import org.infinispan.remoting.transport.Address;
 import org.wildfly.clustering.ee.Batch;
 import org.wildfly.clustering.ee.Batcher;
-import org.wildfly.clustering.group.Group;
-import org.wildfly.clustering.group.Node;
-import org.wildfly.clustering.group.NodeFactory;
+import org.wildfly.clustering.server.group.Group;
 
 /**
- * Configuration for a {@link CacheRegistryFactoryBuilder}.
+ * Configuration for a {@link CacheRegistryFactoryServiceConfigurator}.
  * @author Paul Ferraro
  */
 public interface CacheRegistryConfiguration<K, V> {
     Batcher<? extends Batch> getBatcher();
-    Group getGroup();
-    Cache<Node, Map.Entry<K, V>> getCache();
-    NodeFactory<Address> getNodeFactory();
+    Group<Address> getGroup();
+    Cache<Address, Map.Entry<K, V>> getCache();
 }

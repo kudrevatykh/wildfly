@@ -43,6 +43,9 @@ import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.EnterpriseArchive;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
+import org.jboss.tm.XAResourceRecovery;
+import org.jboss.tm.XAResourceRecoveryRegistry;
+
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -58,6 +61,8 @@ import org.wildfly.transaction.client.provider.jboss.JBossLocalTransactionProvid
 
 import javax.transaction.TransactionManager;
 import javax.transaction.TransactionSynchronizationRegistry;
+
+import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
 
@@ -130,6 +135,14 @@ public class HTTPEJBClientXidTransactionTestCase {
         builder.setXATerminator(xat).setExtendedJBossXATerminator(xat);
         builder.setTransactionManager(narayanaTm);
         builder.setTransactionSynchronizationRegistry(narayanaTsr);
+        builder.setXAResourceRecoveryRegistry(new XAResourceRecoveryRegistry() {
+            @Override public void addXAResourceRecovery(
+                  XAResourceRecovery xaResourceRecovery) {}
+
+            @Override public void removeXAResourceRecovery(
+                  XAResourceRecovery xaResourceRecovery) {}
+        });
+        builder.setXARecoveryLogDirRelativeToPath(new File("target").toPath());
         LocalTransactionContext.getContextManager().setGlobalDefault(new LocalTransactionContext(builder.build()));
         txManager = ContextTransactionManager.getInstance();
         txSyncRegistry = ContextTransactionSynchronizationRegistry.getInstance();

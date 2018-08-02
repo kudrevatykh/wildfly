@@ -28,7 +28,6 @@ import static org.jboss.as.server.Services.addServerExecutorDependency;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -52,7 +51,6 @@ import org.jboss.as.controller.capability.CapabilityServiceSupport;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.ee.beanvalidation.BeanValidationAttachments;
-import org.jboss.as.ee.component.ComponentDescription;
 import org.jboss.as.ee.component.EEModuleDescription;
 import org.jboss.as.ee.structure.DeploymentType;
 import org.jboss.as.ee.structure.DeploymentTypeMarker;
@@ -113,6 +111,8 @@ import org.jipijapa.plugin.spi.PersistenceProviderAdaptor;
 import org.jipijapa.plugin.spi.PersistenceUnitMetadata;
 import org.jipijapa.plugin.spi.Platform;
 import org.jipijapa.plugin.spi.TwoPhaseBootstrapCapable;
+import org.wildfly.transaction.client.ContextTransactionManager;
+import org.wildfly.transaction.client.ContextTransactionSynchronizationRegistry;
 
 /**
  * Handle the installation of the Persistence Unit service
@@ -250,13 +250,6 @@ public class PersistenceUnitServiceHandler {
             final DeploymentUnit deploymentUnit = phaseContext.getDeploymentUnit();
             final Module module = deploymentUnit.getAttachment(Attachments.MODULE);
             final EEModuleDescription eeModuleDescription = deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
-            final Collection<ComponentDescription> components = eeModuleDescription.getComponentDescriptions();
-            if (module == null) {
-                // Unresolved OSGi bundles would not have a module attached
-                ROOT_LOGGER.failedToGetModuleAttachment(deploymentUnit);
-                return;
-            }
-
             final ServiceTarget serviceTarget = phaseContext.getServiceTarget();
             final ModuleClassLoader classLoader = module.getClassLoader();
 
@@ -276,7 +269,7 @@ public class PersistenceUnitServiceHandler {
 
                         if (startEarly) {
                             if (twoPhaseBootStrapCapable) {
-                                deployPersistenceUnitPhaseOne(phaseContext, deploymentUnit, eeModuleDescription, components, serviceTarget, classLoader, pu, adaptor);
+                                deployPersistenceUnitPhaseOne(deploymentUnit, eeModuleDescription, serviceTarget, classLoader, pu, adaptor);
                             }
                             else if (false == Configuration.needClassFileTransformer(pu)) {
                                 // will start later when startEarly == false
@@ -287,16 +280,16 @@ public class PersistenceUnitServiceHandler {
                                 // we need class file transformer to work, don't allow cdi bean manager to be access since that
                                 // could cause application classes to be loaded (workaround by setting jboss.as.jpa.classtransformer to false).  WFLY-1463
                                 final boolean allowCdiBeanManagerAccess = false;
-                                deployPersistenceUnit(phaseContext, deploymentUnit, eeModuleDescription, components, serviceTarget, classLoader, pu, startEarly, provider, adaptor, allowCdiBeanManagerAccess);
+                                deployPersistenceUnit(deploymentUnit, eeModuleDescription, serviceTarget, classLoader, pu, provider, adaptor, allowCdiBeanManagerAccess);
                             }
                         }
                         else { // !startEarly
                             if (twoPhaseBootStrapCapable) {
-                                deployPersistenceUnitPhaseTwo(phaseContext, deploymentUnit, eeModuleDescription, components, serviceTarget, classLoader, pu, provider, adaptor);
+                                deployPersistenceUnitPhaseTwo(deploymentUnit, eeModuleDescription, serviceTarget, classLoader, pu, provider, adaptor);
                             } else if (false == Configuration.needClassFileTransformer(pu)) {
                                 final boolean allowCdiBeanManagerAccess = true;
                                 // PUs that have Configuration.JPA_CONTAINER_CLASS_TRANSFORMER = false will start during INSTALL phase
-                                deployPersistenceUnit(phaseContext, deploymentUnit, eeModuleDescription, components, serviceTarget, classLoader, pu, startEarly, provider, adaptor, allowCdiBeanManagerAccess);
+                                deployPersistenceUnit(deploymentUnit, eeModuleDescription, serviceTarget, classLoader, pu, provider, adaptor, allowCdiBeanManagerAccess);
                             }
                         }
 
@@ -313,34 +306,28 @@ public class PersistenceUnitServiceHandler {
     /**
      * start the persistence unit in one phase
      *
-     * @param phaseContext
      * @param deploymentUnit
      * @param eeModuleDescription
-     * @param components
      * @param serviceTarget
      * @param classLoader
      * @param pu
-     * @param startEarly
      * @param provider
      * @param adaptor
      * @param allowCdiBeanManagerAccess
      * @throws DeploymentUnitProcessingException
      */
     private static void deployPersistenceUnit(
-            final DeploymentPhaseContext phaseContext,
             final DeploymentUnit deploymentUnit,
             final EEModuleDescription eeModuleDescription,
-            final Collection<ComponentDescription> components,
             final ServiceTarget serviceTarget,
             final ModuleClassLoader classLoader,
             final PersistenceUnitMetadata pu,
-            final boolean startEarly,
             final PersistenceProvider provider,
             final PersistenceProviderAdaptor adaptor,
             final boolean allowCdiBeanManagerAccess) throws DeploymentUnitProcessingException {
         pu.setClassLoader(classLoader);
-        TransactionManager transactionManager = deploymentUnit.getAttachment(JpaAttachments.TRANSACTION_MANAGER);
-        TransactionSynchronizationRegistry transactionSynchronizationRegistry = deploymentUnit.getAttachment(JpaAttachments.TRANSACTION_SYNCHRONIZATION_REGISTRY);
+        TransactionManager transactionManager = ContextTransactionManager.getInstance();
+        TransactionSynchronizationRegistry transactionSynchronizationRegistry = ContextTransactionSynchronizationRegistry.getInstance();
         CapabilityServiceSupport capabilitySupport = deploymentUnit.getAttachment(Attachments.CAPABILITY_SERVICE_SUPPORT);
         try {
             ValidatorFactory validatorFactory = null;
@@ -451,10 +438,8 @@ public class PersistenceUnitServiceHandler {
     /**
      * first phase of starting the persistence unit
      *
-     * @param phaseContext
      * @param deploymentUnit
      * @param eeModuleDescription
-     * @param components
      * @param serviceTarget
      * @param classLoader
      * @param pu
@@ -462,10 +447,8 @@ public class PersistenceUnitServiceHandler {
      * @throws DeploymentUnitProcessingException
      */
     private static void deployPersistenceUnitPhaseOne(
-            final DeploymentPhaseContext phaseContext,
             final DeploymentUnit deploymentUnit,
             final EEModuleDescription eeModuleDescription,
-            final Collection<ComponentDescription> components,
             final ServiceTarget serviceTarget,
             final ModuleClassLoader classLoader,
             final PersistenceUnitMetadata pu,
@@ -564,10 +547,8 @@ public class PersistenceUnitServiceHandler {
     /**
      * Second phase of starting the persistence unit
      *
-     * @param phaseContext
      * @param deploymentUnit
      * @param eeModuleDescription
-     * @param components
      * @param serviceTarget
      * @param classLoader
      * @param pu
@@ -576,10 +557,8 @@ public class PersistenceUnitServiceHandler {
      * @throws DeploymentUnitProcessingException
      */
     private static void deployPersistenceUnitPhaseTwo(
-            final DeploymentPhaseContext phaseContext,
             final DeploymentUnit deploymentUnit,
             final EEModuleDescription eeModuleDescription,
-            final Collection<ComponentDescription> components,
             final ServiceTarget serviceTarget,
             final ModuleClassLoader classLoader,
             final PersistenceUnitMetadata pu,
@@ -853,10 +832,10 @@ public class PersistenceUnitServiceHandler {
                 // the noop adaptor is returned (can be used against any provider but the integration classes
                 // are handled externally via properties or code in the persistence provider).
                 if (adaptorModule != null) { // legacy way of loading adapter module
-                    adaptor = PersistenceProviderAdaptorLoader.loadPersistenceAdapterModule(adaptorModule, platform, createManager(deploymentUnit));
+                    adaptor = PersistenceProviderAdaptorLoader.loadPersistenceAdapterModule(adaptorModule, platform, JtaManagerImpl.getInstance());
                 }
                 else {
-                    adaptor = PersistenceProviderAdaptorLoader.loadPersistenceAdapter(provider, platform, createManager(deploymentUnit));
+                    adaptor = PersistenceProviderAdaptorLoader.loadPersistenceAdapter(provider, platform, JtaManagerImpl.getInstance());
                 }
             } catch (ModuleLoadException e) {
                 throw JpaLogger.ROOT_LOGGER.persistenceProviderAdaptorModuleLoadError(e, adaptorModule);
@@ -868,10 +847,6 @@ public class PersistenceUnitServiceHandler {
             throw JpaLogger.ROOT_LOGGER.failedToGetAdapter(pu.getPersistenceProviderClassName());
         }
         return adaptor;
-    }
-
-    private static JtaManagerImpl createManager(DeploymentUnit deploymentUnit) {
-        return new JtaManagerImpl(deploymentUnit.getAttachment(JpaAttachments.TRANSACTION_MANAGER), deploymentUnit.getAttachment(JpaAttachments.TRANSACTION_SYNCHRONIZATION_REGISTRY));
     }
 
     /**
@@ -946,13 +921,13 @@ public class PersistenceUnitServiceHandler {
         /**
          * check if the deployment is already associated with the specified persistence provider
          */
-        List<PersistenceProvider> providerList = persistenceProviderDeploymentHolder != null ?
+        Map<String, PersistenceProvider> providerMap = persistenceProviderDeploymentHolder != null ?
                 persistenceProviderDeploymentHolder.getProviders() : null;
-        if (providerList != null) {
-            for (PersistenceProvider persistenceProvider : providerList) {
-                if (persistenceProvider.getClass().getName().equals(pu.getPersistenceProviderClassName())) {
+        if (providerMap != null) {
+            synchronized (providerMap) {
+                if(providerMap.containsKey(pu.getPersistenceProviderClassName())){
                     ROOT_LOGGER.tracef("deployment %s is using %s", deploymentUnit.getName(), pu.getPersistenceProviderClassName());
-                    return persistenceProvider;
+                    return providerMap.get(pu.getPersistenceProviderClassName());
                 }
             }
         }

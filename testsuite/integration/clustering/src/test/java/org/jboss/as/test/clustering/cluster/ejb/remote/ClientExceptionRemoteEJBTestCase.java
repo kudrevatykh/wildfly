@@ -22,18 +22,16 @@
 
 package org.jboss.as.test.clustering.cluster.ejb.remote;
 
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 import java.util.PropertyPermission;
 
 import javax.ejb.EJBException;
 
 import org.jboss.arquillian.container.test.api.Deployment;
-import org.jboss.arquillian.container.test.api.RunAsClient;
 import org.jboss.arquillian.container.test.api.TargetsContainer;
 import org.jboss.arquillian.junit.Arquillian;
-import org.jboss.as.test.clustering.cluster.ClusterAbstractTestCase;
+import org.jboss.as.test.clustering.cluster.AbstractClusteringTestCase;
 import org.jboss.as.test.clustering.cluster.ejb.remote.bean.Incrementor;
 import org.jboss.as.test.clustering.cluster.ejb.remote.bean.IncrementorBean;
 import org.jboss.as.test.clustering.cluster.ejb.remote.bean.InfinispanExceptionThrowingIncrementorBean;
@@ -53,18 +51,17 @@ import org.junit.runner.RunWith;
  * @author Radoslav Husar
  */
 @RunWith(Arquillian.class)
-@RunAsClient
-public class ClientExceptionRemoteEJBTestCase extends ClusterAbstractTestCase {
-    private static final String MODULE_NAME = "client-exception-remote-ejb-test";
+public class ClientExceptionRemoteEJBTestCase extends AbstractClusteringTestCase {
+    private static final String MODULE_NAME = ClientExceptionRemoteEJBTestCase.class.getSimpleName();
 
     @Deployment(name = DEPLOYMENT_1, managed = false, testable = false)
-    @TargetsContainer(CONTAINER_1)
+    @TargetsContainer(NODE_1)
     public static Archive<?> createDeploymentForContainer1() {
         return createDeployment();
     }
 
     @Deployment(name = DEPLOYMENT_2, managed = false, testable = false)
-    @TargetsContainer(CONTAINER_2)
+    @TargetsContainer(NODE_2)
     public static Archive<?> createDeploymentForContainer2() {
         return createDeployment();
     }

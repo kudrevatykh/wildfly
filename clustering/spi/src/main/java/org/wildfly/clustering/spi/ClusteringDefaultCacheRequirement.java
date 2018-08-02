@@ -27,7 +27,6 @@ import org.jboss.as.clustering.controller.UnaryRequirementServiceNameFactory;
 import org.jboss.as.clustering.controller.UnaryServiceNameFactory;
 import org.jboss.as.clustering.controller.UnaryServiceNameFactoryProvider;
 import org.wildfly.clustering.group.Group;
-import org.wildfly.clustering.group.NodeFactory;
 import org.wildfly.clustering.provider.ServiceProviderRegistry;
 import org.wildfly.clustering.registry.Registry;
 import org.wildfly.clustering.registry.RegistryFactory;
@@ -39,12 +38,13 @@ import org.wildfly.clustering.singleton.SingletonDefaultCacheRequirement;
  */
 public enum ClusteringDefaultCacheRequirement implements UnaryRequirement, UnaryServiceNameFactoryProvider {
     GROUP("org.wildfly.clustering.cache.default-group", Group.class),
-    NODE_FACTORY("org.wildfly.clustering.cache.default-node-factory", NodeFactory.class),
+    @Deprecated NODE_FACTORY("org.wildfly.clustering.cache.default-node-factory", org.wildfly.clustering.group.NodeFactory.class),
     REGISTRY("org.wildfly.clustering.cache.default-registry", Registry.class),
     REGISTRY_ENTRY("org.wildfly.clustering.cache.default-registry-entry", Map.Entry.class),
     REGISTRY_FACTORY("org.wildfly.clustering.cache.default-registry-factory", RegistryFactory.class),
     SERVICE_PROVIDER_REGISTRY("org.wildfly.clustering.cache.default-service-provider-registry", ServiceProviderRegistry.class),
-    SINGLETON_SERVICE_BUILDER_FACTORY(SingletonDefaultCacheRequirement.SINGLETON_SERVICE_BUILDER_FACTORY),
+    @Deprecated SINGLETON_SERVICE_BUILDER_FACTORY(SingletonDefaultCacheRequirement.SINGLETON_SERVICE_BUILDER_FACTORY),
+    SINGLETON_SERVICE_CONFIGURATOR_FACTORY(SingletonDefaultCacheRequirement.SINGLETON_SERVICE_CONFIGURATOR_FACTORY),
     ;
     private final String name;
     private final Class<?> type;

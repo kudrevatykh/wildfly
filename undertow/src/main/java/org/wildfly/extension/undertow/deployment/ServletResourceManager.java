@@ -33,6 +33,7 @@ import io.undertow.server.handlers.resource.PathResourceManager;
 import io.undertow.server.handlers.resource.Resource;
 import io.undertow.server.handlers.resource.ResourceChangeListener;
 import io.undertow.server.handlers.resource.ResourceManager;
+import io.undertow.util.CanonicalPathUtils;
 
 /**
  * Resource manager that deals with overlays
@@ -47,10 +48,13 @@ public class ServletResourceManager implements ResourceManager {
     private final ResourceManager[] externalOverlays;
     private final boolean explodedDeployment;
 
-    public ServletResourceManager(final VirtualFile resourcesRoot, final Collection<VirtualFile> overlays, boolean explodedDeployment, boolean followSymlink, boolean disableFileWatchService, List<String> externalOverlays) throws IOException {
+    public ServletResourceManager(final VirtualFile resourcesRoot, final Collection<VirtualFile> overlays,
+                                  boolean explodedDeployment, boolean followSymlink, boolean disableFileWatchService,
+                                  List<String> externalOverlays) throws IOException {
         this.explodedDeployment = explodedDeployment;
         Path physicalFile = resourcesRoot.getPhysicalFile().toPath().toRealPath();
-        deploymentResourceManager = new PathResourceManager(physicalFile, TRANSFER_MIN_SIZE, true, followSymlink, !disableFileWatchService);
+        deploymentResourceManager = new PathResourceManager(physicalFile, TRANSFER_MIN_SIZE, true,
+                followSymlink, !disableFileWatchService);
         this.overlays = overlays;
         if(externalOverlays == null) {
             this.externalOverlays = new ResourceManager[0];
@@ -58,7 +62,8 @@ public class ServletResourceManager implements ResourceManager {
             this.externalOverlays = new ResourceManager[externalOverlays.size()];
             for (int i = 0; i < externalOverlays.size(); ++i) {
                 String path = externalOverlays.get(i);
-                PathResourceManager pr = new PathResourceManager(Paths.get(path), TRANSFER_MIN_SIZE, true, followSymlink, !disableFileWatchService);
+                PathResourceManager pr = new PathResourceManager(Paths.get(path).toRealPath(), TRANSFER_MIN_SIZE,
+                        true, followSymlink, !disableFileWatchService);
                 this.externalOverlays[i] = pr;
             }
         }
@@ -75,10 +80,19 @@ public class ServletResourceManager implements ResourceManager {
             p = p.substring(1);
         }
         if (overlays != null) {
+            String canonical = CanonicalPathUtils.canonicalize(p); //we don't need to do this for other resources, as the underlying RM will handle it
             for (VirtualFile overlay : overlays) {
-                VirtualFile child = overlay.getChild(p);
+                VirtualFile child = overlay.getChild(canonical);
                 if (child.exists()) {
-                    return new ServletResource(this, new VirtualFileResource(overlay.getPhysicalFile(), child, path));
+                    try {
+                        //we make sure the child is actually a child of the parent
+                        //CanonicalPathUtils should make sure this cannot happen
+                        //but just to be safe we do it anyway
+                        child.getPathNameRelativeTo(overlay);
+                        return new ServletResource(this, new VirtualFileResource(overlay.getPhysicalFile(), child, canonical));
+                    } catch (IllegalArgumentException ignore) {
+
+                    }
                 }
             }
         }
@@ -99,7 +113,7 @@ public class ServletResourceManager implements ResourceManager {
 
     @Override
     public void registerResourceChangeListener(ResourceChangeListener listener) {
-        if(deploymentResourceManager.isResourceChangeListenerSupported()) {
+        if(explodedDeployment && deploymentResourceManager.isResourceChangeListenerSupported()) {
             deploymentResourceManager.registerResourceChangeListener(listener);
         }
         for(ResourceManager external : externalOverlays) {

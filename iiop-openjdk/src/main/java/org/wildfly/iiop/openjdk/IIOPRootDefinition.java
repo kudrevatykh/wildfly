@@ -34,11 +34,13 @@ import org.jboss.as.controller.ReloadRequiredRemoveStepHandler;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.access.constraint.SensitivityClassification;
 import org.jboss.as.controller.access.management.SensitiveTargetAccessConstraintDefinition;
+import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.operations.validation.EnumValidator;
 import org.jboss.as.controller.operations.validation.IntRangeValidator;
 import org.jboss.as.controller.operations.validation.ParameterValidator;
 import org.jboss.as.controller.operations.validation.StringLengthValidator;
 import org.jboss.as.controller.registry.AttributeAccess;
+import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 
@@ -46,6 +48,8 @@ import org.jboss.dmr.ModelType;
  * @author <a href="mailto:tadamski@redhat.com">Tomasz Adamski</a>
  */
 class IIOPRootDefinition extends PersistentResourceDefinition {
+
+    static final RuntimeCapability<Void> IIOP_CAPABILITY = RuntimeCapability.Builder.of(Capabilities.IIOP_CAPABILITY, false).build();
 
     static final ModelNode NONE = new ModelNode("none");
 
@@ -61,7 +65,6 @@ class IIOPRootDefinition extends PersistentResourceDefinition {
 
     static final ParameterValidator VALIDATOR = new EnumValidator<>(IORTransportConfigValues.class,
             true, true);
-
 
     //ORB attributes
 
@@ -109,6 +112,7 @@ class IIOPRootDefinition extends PersistentResourceDefinition {
             .setValidator(LENGTH_VALIDATOR)
             .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
             .setAllowExpression(true)
+            .setCapabilityReference(Capabilities.AUTH_CONTEXT_CAPABILITY, IIOP_CAPABILITY)
             .addAccessConstraint(IIOP_SECURITY_DEF).build();
 
     protected static final AttributeDefinition TRANSACTIONS = new SimpleAttributeDefinitionBuilder(
@@ -153,6 +157,7 @@ class IIOPRootDefinition extends PersistentResourceDefinition {
             .addAccessConstraint(SensitiveTargetAccessConstraintDefinition.SECURITY_DOMAIN_REF)
             .addAccessConstraint(IIOP_SECURITY_DEF)
             .setAlternatives(Constants.SERVER_SSL_CONTEXT, Constants.CLIENT_SSL_CONTEXT)
+            .setCapabilityReference(Capabilities.LEGACY_SECURITY_DOMAIN_CAPABILITY, IIOP_CAPABILITY)
             .build();
 
     public static final AttributeDefinition SERVER_SSL_CONTEXT = new SimpleAttributeDefinitionBuilder(
@@ -163,6 +168,7 @@ class IIOPRootDefinition extends PersistentResourceDefinition {
             .setValidator(LENGTH_VALIDATOR)
             .setAlternatives(Constants.SECURITY_SECURITY_DOMAIN)
             .setRequires(Constants.CLIENT_SSL_CONTEXT)
+            .setCapabilityReference(Capabilities.SSL_CONTEXT_CAPABILITY, IIOP_CAPABILITY)
             .build();
 
     public static final AttributeDefinition CLIENT_SSL_CONTEXT = new SimpleAttributeDefinitionBuilder(
@@ -173,6 +179,7 @@ class IIOPRootDefinition extends PersistentResourceDefinition {
             .setValidator(LENGTH_VALIDATOR)
             .setAlternatives(Constants.SECURITY_SECURITY_DOMAIN)
             .setRequires(Constants.SERVER_SSL_CONTEXT)
+            .setCapabilityReference(Capabilities.SSL_CONTEXT_CAPABILITY, IIOP_CAPABILITY)
             .build();
 
     @Deprecated
@@ -256,6 +263,15 @@ class IIOPRootDefinition extends PersistentResourceDefinition {
             .setAllowExpression(true)
             .addAccessConstraint(IIOP_SECURITY_DEF)
             .build();
+
+    public static final AttributeDefinition INTEROP_IONA = new SimpleAttributeDefinitionBuilder(
+            Constants.INTEROP_IONA, ModelType.BOOLEAN, true)
+            .setAttributeGroup(Constants.INTEROP)
+            .setDefaultValue(new ModelNode(false))
+            .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
+            .setAllowExpression(true)
+            .build();
+
 
     protected static final PropertiesAttributeDefinition PROPERTIES = new PropertiesAttributeDefinition.Builder(
             Constants.PROPERTIES, true)
@@ -377,6 +393,9 @@ class IIOPRootDefinition extends PersistentResourceDefinition {
             SERVER_SSL_CONTEXT, CLIENT_SSL_CONTEXT, SERVER_REQUIRES_SSL, CLIENT_REQUIRES_SSL,
             ADD_COMPONENT_INTERCEPTOR, CLIENT_SUPPORTS, CLIENT_REQUIRES, SERVER_SUPPORTS, SERVER_REQUIRES);
 
+    // list that contains interoperability attributes definitions
+    static final List<AttributeDefinition> INTEROP_ATTRIBUTES = Arrays.asList(INTEROP_IONA);
+
     //list that contains tcp attributes definitions
     protected static final List<AttributeDefinition> TCP_ATTRIBUTES = Arrays.asList(HIGH_WATER_MARK,
             NUMBER_TO_RECLAIM);
@@ -400,6 +419,7 @@ class IIOPRootDefinition extends PersistentResourceDefinition {
         CONFIG_ATTRIBUTES.addAll(INITIALIZERS_ATTRIBUTES);
         CONFIG_ATTRIBUTES.addAll(NAMING_ATTRIBUTES);
         CONFIG_ATTRIBUTES.addAll(SECURITY_ATTRIBUTES);
+        CONFIG_ATTRIBUTES.addAll(INTEROP_ATTRIBUTES);
         CONFIG_ATTRIBUTES.add(PROPERTIES);
 
         IOR_ATTRIBUTES.addAll(IOR_TRANSPORT_CONFIG_ATTRIBUTES);
@@ -420,6 +440,12 @@ class IIOPRootDefinition extends PersistentResourceDefinition {
     @Override
     public Collection<AttributeDefinition> getAttributes() {
         return ALL_ATTRIBUTES;
+    }
+
+    @Override
+    public void registerCapabilities(ManagementResourceRegistration resourceRegistration) {
+        super.registerCapabilities(resourceRegistration);
+        resourceRegistration.registerCapability(IIOP_CAPABILITY);
     }
 
     private enum AuthMethodValues {

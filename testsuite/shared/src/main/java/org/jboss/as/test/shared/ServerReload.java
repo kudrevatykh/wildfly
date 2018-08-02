@@ -59,12 +59,19 @@ public class ServerReload {
         executeReloadAndWaitForCompletion(client, TIMEOUT);
     }
 
+    public static void executeReloadAndWaitForCompletion(ModelControllerClient client, String serverConfig) {
+        executeReloadAndWaitForCompletion(client, TIMEOUT, false, null, -1, serverConfig);
+    }
     public static void executeReloadAndWaitForCompletion(ModelControllerClient client, boolean adminOnly) {
         executeReloadAndWaitForCompletion(client, TIMEOUT, adminOnly, null, -1);
     }
 
     public static void executeReloadAndWaitForCompletion(ModelControllerClient client, int timeout) {
         executeReloadAndWaitForCompletion(client, timeout, false, null, -1);
+    }
+
+    public static void executeReloadAndWaitForCompletion(ManagementClient managementClient) {
+        executeReloadAndWaitForCompletion(managementClient.getControllerClient(), TIMEOUT, false, managementClient.getMgmtAddress(), managementClient.getMgmtPort());
     }
 
     /**
@@ -76,21 +83,38 @@ public class ServerReload {
      * @param serverPort if {@code -1}, use {@code TestSuiteEnvironment.getServerPort()} to create the ModelControllerClient
      */
     public static void executeReloadAndWaitForCompletion(ModelControllerClient client, int timeout, boolean adminOnly, String serverAddress, int serverPort) {
-        executeReload(client, adminOnly);
+        executeReload(client, adminOnly, null);
+        waitForLiveServerToReload(timeout,
+                serverAddress != null ? serverAddress : TestSuiteEnvironment.getServerAddress(),
+                serverPort != -1 ? serverPort : TestSuiteEnvironment.getServerPort());
+    }
+    /**
+     *
+     * @param client
+     * @param timeout
+     * @param adminOnly if {@code true}, the server will be reloaded in admin-only mode
+     * @param serverAddress if {@code null}, use {@code TestSuiteEnvironment.getServerAddress()} to create the ModelControllerClient
+     * @param serverPort if {@code -1}, use {@code TestSuiteEnvironment.getServerPort()} to create the ModelControllerClient
+     */
+    public static void executeReloadAndWaitForCompletion(ModelControllerClient client, int timeout, boolean adminOnly, String serverAddress, int serverPort, String serverConfig) {
+        executeReload(client, adminOnly, serverConfig);
         waitForLiveServerToReload(timeout,
                 serverAddress != null ? serverAddress : TestSuiteEnvironment.getServerAddress(),
                 serverPort != -1 ? serverPort : TestSuiteEnvironment.getServerPort());
     }
 
-    private static void executeReload(ModelControllerClient client, boolean adminOnly) {
+    private static void executeReload(ModelControllerClient client, boolean adminOnly, String serverConfig) {
         ModelNode operation = new ModelNode();
         operation.get(OP_ADDR).setEmptyList();
         operation.get(OP).set("reload");
         operation.get("admin-only").set(adminOnly);
+        if(serverConfig != null) {
+            operation.get("server-config").set(serverConfig);
+        }
         try {
             ModelNode result = client.execute(operation);
             if (!"success".equals(result.get(ClientConstants.OUTCOME).asString())) {
-                fail("Reload operation didn't finished successfully: " + result.asString());
+                fail("Reload operation didn't finish successfully: " + result.asString());
             }
         } catch(IOException e) {
             final Throwable cause = e.getCause();
@@ -107,6 +131,12 @@ public class ServerReload {
         operation.get(OP).set(READ_ATTRIBUTE_OPERATION);
         operation.get(NAME).set("server-state");
         while (System.currentTimeMillis() - start < timeout) {
+            //do the sleep before we check, as the attribute state may not change instantly
+            //also reload generally takes longer than 100ms anyway
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+            }
             try {
                 ModelControllerClient liveClient = ModelControllerClient.Factory.create(
                         serverAddress, serverPort);
@@ -118,10 +148,6 @@ public class ServerReload {
                 } catch (IOException e) {
                 } finally {
                     IoUtils.safeClose(liveClient);
-                }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
                 }
             } catch (UnknownHostException e) {
                 throw new RuntimeException(e);
@@ -153,6 +179,17 @@ public class ServerReload {
         if ("reload-required".equalsIgnoreCase(runningState)) {
             log.trace("Server reload is required. The reload will be executed.");
             executeReloadAndWaitForCompletion(controllerClient);
+        } else {
+            log.debugf("Server reload is not required; server-state is %s", runningState);
+            Assert.assertEquals("Server state 'running' is expected", "running", runningState);
+        }
+    }
+
+    public static void reloadIfRequired(final ManagementClient managementClient) throws Exception {
+        String runningState = getContainerRunningState(managementClient);
+        if ("reload-required".equalsIgnoreCase(runningState)) {
+            log.trace("Server reload is required. The reload will be executed.");
+            executeReloadAndWaitForCompletion(managementClient);
         } else {
             log.debugf("Server reload is not required; server-state is %s", runningState);
             Assert.assertEquals("Server state 'running' is expected", "running", runningState);

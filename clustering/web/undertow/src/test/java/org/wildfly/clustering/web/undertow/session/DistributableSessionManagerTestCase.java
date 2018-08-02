@@ -81,6 +81,8 @@ public class DistributableSessionManagerTestCase {
 
     @Test
     public void stop() {
+        when(this.manager.getDefaultMaxInactiveInterval()).thenReturn(Duration.ZERO);
+
         this.adapter.stop();
 
         verify(this.manager).stop();
@@ -231,6 +233,10 @@ public class DistributableSessionManagerTestCase {
         when(config.findSessionId(exchange)).thenReturn(sessionId);
 
         io.undertow.server.session.Session sessionAdapter = this.adapter.getSession(exchange, config);
+
+        assertNull(sessionAdapter);
+
+        sessionAdapter = this.adapter.getSession(sessionId);
 
         assertNull(sessionAdapter);
 

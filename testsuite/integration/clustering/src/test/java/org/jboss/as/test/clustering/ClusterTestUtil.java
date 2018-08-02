@@ -21,8 +21,6 @@
  */
 package org.jboss.as.test.clustering;
 
-import javax.naming.NamingException;
-
 import org.jboss.as.arquillian.container.ManagementClient;
 import org.jboss.as.server.security.ServerPermission;
 import org.jboss.as.test.clustering.ejb.EJBDirectory;
@@ -42,18 +40,6 @@ import org.jboss.shrinkwrap.api.container.ManifestContainer;
  */
 public class ClusterTestUtil {
 
-    public static void waitForReplication(int millis) {
-        if ("SYNC".equals(ClusteringTestConstants.TEST_CACHE_MODE)) {
-            // In case the replication is sync, we do not need to wait for the replication to happen.
-            return;
-        }
-        // TODO: Instead of dummy waiting, we could attach a listener and notify the test framework the replication has happened. millis value can be used as timeout in that case.
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException iex) {
-        }
-    }
-
     /**
      * <em>Note that should you need to manually add an extra set of permissions, the following permission is required for this utility to work within
      * security manager:</em>
@@ -69,7 +55,7 @@ public class ClusterTestUtil {
         return archive;
     }
 
-    public static void establishTopology(EJBDirectory directory, String container, String cache, String... nodes) throws NamingException, InterruptedException {
+    public static void establishTopology(EJBDirectory directory, String container, String cache, String... nodes) throws Exception {
         TopologyChangeListener listener = directory.lookupStateless(TopologyChangeListenerBean.class, TopologyChangeListener.class);
         listener.establishTopology(container, cache, TopologyChangeListener.DEFAULT_TIMEOUT, nodes);
     }

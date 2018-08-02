@@ -28,8 +28,10 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUB
 
 import org.jboss.arquillian.container.test.api.RunAsClient;
 import org.jboss.arquillian.junit.Arquillian;
+import org.jboss.as.test.shared.ServerSnapshot;
 import org.jboss.dmr.ModelNode;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -105,19 +107,19 @@ public class DataSourcePoolStatisticsTestCase extends JcaStatisticsBase {
         return address;
     }
 
+    private AutoCloseable snapshot;
+
+    @Before
+    public void snapshot() {
+        snapshot = ServerSnapshot.takeSnapshot(getManagementClient());
+    }
+
     @After
     public void closeDataSources() throws Exception {
-        while (dsCount > 0) {
-            remove(getDsAddress(dsCount, false));
-            reload();
-            dsCount--;
-        }
-        while (xaDsCount > 0) {
-            remove(getDsAddress(xaDsCount, true));
-            reload();
-            xaDsCount--;
-        }
-
+        snapshot.close();
+        snapshot = null;
+        dsCount = 0;
+        xaDsCount = 0;
     }
 
     public String getJndi(int count, boolean xa) {

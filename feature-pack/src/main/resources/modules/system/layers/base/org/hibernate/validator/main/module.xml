@@ -22,10 +22,10 @@
   ~ 02110-1301 USA, or see the FSF site: http://www.fsf.org.
   -->
 
-<module xmlns="urn:jboss:module:1.5" name="org.hibernate.validator">
+<module xmlns="urn:jboss:module:1.7" name="org.hibernate.validator">
 
   <resources>
-    <artifact name="${org.hibernate:hibernate-validator}"/>
+    <artifact name="${org.hibernate.validator:hibernate-validator}"/>
   </resources>
 
   <dependencies>
@@ -39,7 +39,6 @@
     <module name="org.jboss.weld.spi"/>
     <module name="org.joda.time"/>
     <module name="org.jsoup"/>
-    <module name="org.slf4j"/>
     <module name="org.apache.xerces" services="import"/>
     <module name="sun.jdk" services="import"/>
   </dependencies>

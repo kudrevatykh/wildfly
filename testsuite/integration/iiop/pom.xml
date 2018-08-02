@@ -6,7 +6,11 @@
     <parent>
         <groupId>org.wildfly</groupId>
         <artifactId>wildfly-ts-integ</artifactId>
-        <version>11.0.0.Final-SNAPSHOT</version>
+        <!--
+        Maintain separation between the artifact id and the version to help prevent
+        merge conflicts between commits changing the GA and those changing the V.
+        -->
+        <version>14.0.0.Beta2-SNAPSHOT</version>
     </parent>
 
     <!-- ********************************************************************************** -->
@@ -22,8 +26,7 @@
         <jbossas.project.dir>${jbossas.ts.dir}/..</jbossas.project.dir>
         <iiop.endorsed.argline>-Djava.endorsed.dirs=${project.build.directory}/endorsed</iiop.endorsed.argline>
         <ts.elytron.cli>ssl-enable-elytron.cli</ts.elytron.cli>
-        <jbossas>jbossas</jbossas>
-        <wildfly.config.dir>${basedir}/target/${jbossas}/standalone/configuration</wildfly.config.dir>
+        <wildfly.config.dir>${basedir}/target/wildfly/standalone/configuration</wildfly.config.dir>
     </properties>
 
     <profiles>
@@ -68,7 +71,7 @@
                         <artifactId>maven-antrun-plugin</artifactId>
                         <executions combine.children="append">
                             <execution>
-                                <id>build-clustering.server</id>
+                                <id>build-iiop.server</id>
                                 <phase>process-test-resources</phase>
                                 <goals>
                                     <goal>run</goal>
@@ -106,14 +109,15 @@
                                 <jboss.server.config.file.name>standalone-full.xml</jboss.server.config.file.name>
                                 <!-- EJB client library hack, see WFLY-4973-->
                                 <org.jboss.ejb.client.wildfly-testsuite-hack>true</org.jboss.ejb.client.wildfly-testsuite-hack>
-                                <server.jvm.args>${surefire.system.args} ${jvm.args.ip.server} -Dnode1=${node1}</server.jvm.args>
-                                <server.jvm2.args>${surefire.system.args} ${jvm.args.ip} -Djboss.bind.address=${node1} -Djboss.bind.address.management=${node1} -Djboss.bind.address.unsecure=${node1}</server.jvm2.args>
+                                <server.jvm.args>${surefire.system.args} ${jvm.args.ip.server} -Dnode1=${node1} ${extra.server.jvm.args}</server.jvm.args>
+                                <server.jvm2.args>${surefire.system.args} ${jvm.args.ip} -Djboss.bind.address=${node1} -Djboss.bind.address.management=${node1} -Djboss.bind.address.unsecure=${node1} ${extra.server.jvm.args}</server.jvm2.args>
                             </systemPropertyVariables>
                             <argLine>
                                 ${modular.jdk.args} ${iiop.endorsed.argline}
                                 -Dcom.sun.CORBA.ORBUseDynamicStub=true
                                 -Dcom.arjuna.ats.arjuna.common.propertiesFile=jbossts-properties.xml ${surefire.jacoco.args}
                             </argLine>
+                            <workingDirectory>${basedir}/target</workingDirectory>
                         </configuration>
                         <executions combine.children="append">
 
@@ -371,7 +375,7 @@
         <profile>
             <id>jdk9</id>
             <activation>
-                <jdk>9</jdk>
+                <jdk>[9,)</jdk>
             </activation>
             <properties>
                 <!-- JDK9 does not support endorsing mechanism -->

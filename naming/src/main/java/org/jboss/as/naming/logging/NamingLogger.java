@@ -28,7 +28,6 @@ import static org.jboss.logging.Logger.Level.WARN;
 
 import java.security.Permission;
 
-import javax.annotation.Resource;
 import javax.naming.Context;
 import javax.naming.InvalidNameException;
 import javax.naming.Name;
@@ -551,7 +550,7 @@ public interface NamingLogger extends BasicLogger {
 //    String failedToTransformExternalContext(String modelVersion);
 
     /**
-     * Creates an exception indicating a lookup failed, wrt {@link Resource} injection.
+     * Creates an exception indicating a lookup failed, wrt {@link javax.annotation.Resource} injection.
      *
      * @param jndiName the JNDI name.
      *
@@ -592,4 +591,7 @@ public interface NamingLogger extends BasicLogger {
 
     @Message(id = 64, value = "Cannot rebind external context lookup")
     OperationFailedException cannotRebindExternalContext();
+
+    @Message(id = 65, value = "Could not load module %s - the module or one of its dependencies is missing [%s]")
+    OperationFailedException moduleNotFound(ModuleIdentifier moduleID, String missingModule);
 }

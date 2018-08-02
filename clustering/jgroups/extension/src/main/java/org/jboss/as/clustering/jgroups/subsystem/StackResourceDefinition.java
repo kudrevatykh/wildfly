@@ -30,7 +30,7 @@ import org.jboss.as.clustering.controller.ManagementResourceRegistration;
 import org.jboss.as.clustering.controller.OperationHandler;
 import org.jboss.as.clustering.controller.Operations;
 import org.jboss.as.clustering.controller.ResourceDescriptor;
-import org.jboss.as.clustering.controller.ResourceServiceBuilderFactory;
+import org.jboss.as.clustering.controller.ResourceServiceConfiguratorFactory;
 import org.jboss.as.clustering.controller.ResourceServiceHandler;
 import org.jboss.as.clustering.controller.SimpleResourceRegistration;
 import org.jboss.as.clustering.controller.UnaryRequirementCapability;
@@ -59,7 +59,6 @@ import org.jboss.as.controller.transform.description.RejectAttributeChecker;
 import org.jboss.as.controller.transform.description.ResourceTransformationDescriptionBuilder;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
-import org.wildfly.clustering.jgroups.spi.ChannelFactory;
 import org.wildfly.clustering.jgroups.spi.JGroupsRequirement;
 import org.wildfly.clustering.service.UnaryRequirement;
 
@@ -77,13 +76,18 @@ public class StackResourceDefinition extends ChildResourceDefinition<ManagementR
         return PathElement.pathElement("stack", name);
     }
 
-    enum Attribute implements org.jboss.as.clustering.controller.Attribute {
-        STATISTICS_ENABLED(ModelDescriptionConstants.STATISTICS_ENABLED, ModelType.BOOLEAN, builder -> builder.setDefaultValue(new ModelNode(false))),
+    enum Attribute implements org.jboss.as.clustering.controller.Attribute, UnaryOperator<SimpleAttributeDefinitionBuilder> {
+        STATISTICS_ENABLED(ModelDescriptionConstants.STATISTICS_ENABLED, ModelType.BOOLEAN) {
+            @Override
+            public SimpleAttributeDefinitionBuilder apply(SimpleAttributeDefinitionBuilder builder) {
+                return builder.setDefaultValue(new ModelNode(false));
+            }
+        },
         ;
         private final AttributeDefinition definition;
 
-        Attribute(String name, ModelType type, UnaryOperator<SimpleAttributeDefinitionBuilder> configurator) {
-            this.definition = configurator.apply(new SimpleAttributeDefinitionBuilder(name, type)
+        Attribute(String name, ModelType type) {
+            this.definition = this.apply(new SimpleAttributeDefinitionBuilder(name, type)
                     .setRequired(false)
                     .setAllowExpression(true)
                     .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
@@ -166,23 +170,13 @@ public class StackResourceDefinition extends ChildResourceDefinition<ManagementR
         ProtocolRegistration.buildTransformation(version, builder);
     }
 
-    private final ResourceServiceBuilderFactory<ChannelFactory> builderFactory = address -> new JChannelFactoryBuilder(address);
-
-    // registration
-    public StackResourceDefinition() {
-        super(WILDCARD_PATH, JGroupsExtension.SUBSYSTEM_RESOLVER.createChildResolver(WILDCARD_PATH));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void register(ManagementResourceRegistration parentRegistration) {
-        ManagementResourceRegistration registration = parentRegistration.registerSubModel(this);
-
-        ResourceDescriptor descriptor = new ResourceDescriptor(this.getResourceDescriptionResolver())
-                .addAttributes(Attribute.class)
-                .addExtraParameters(TRANSPORT, PROTOCOLS)
-                .addCapabilities(Capability.class)
-                .setAddOperationTransformation(handler -> (context, operation) -> {
+    static class AddOperationTransformation implements UnaryOperator<OperationStepHandler> {
+        @Override
+        public OperationStepHandler apply(OperationStepHandler handler) {
+            return new OperationStepHandler() {
+                @SuppressWarnings("deprecation")
+                @Override
+                public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
                     if (operation.hasDefined(TRANSPORT.getName())) {
                         PathAddress address = context.getCurrentAddress();
                         ModelNode transport = operation.get(TRANSPORT.getName());
@@ -217,9 +211,30 @@ public class StackResourceDefinition extends ChildResourceDefinition<ManagementR
                         }
                     }
                     handler.execute(context, operation);
-                })
+                }
+            };
+        }
+    }
+
+    private final ResourceServiceConfiguratorFactory serviceConfiguratorFactory = JChannelFactoryServiceConfigurator::new;
+
+    // registration
+    public StackResourceDefinition() {
+        super(WILDCARD_PATH, JGroupsExtension.SUBSYSTEM_RESOLVER.createChildResolver(WILDCARD_PATH));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public ManagementResourceRegistration register(ManagementResourceRegistration parent) {
+        ManagementResourceRegistration registration = parent.registerSubModel(this);
+
+        ResourceDescriptor descriptor = new ResourceDescriptor(this.getResourceDescriptionResolver())
+                .addAttributes(Attribute.class)
+                .addExtraParameters(TRANSPORT, PROTOCOLS)
+                .addCapabilities(Capability.class)
+                .setAddOperationTransformation(new AddOperationTransformation())
                 ;
-        ResourceServiceHandler handler = new StackServiceHandler(this.builderFactory);
+        ResourceServiceHandler handler = new StackServiceHandler(this.serviceConfiguratorFactory);
         new SimpleResourceRegistration(descriptor, handler).register(registration);
 
         OperationDefinition legacyAddProtocolOperation = new SimpleOperationDefinitionBuilder("add-protocol", this.getResourceDescriptionResolver())
@@ -273,9 +288,11 @@ public class StackResourceDefinition extends ChildResourceDefinition<ManagementR
             new OperationHandler<>(new StackOperationExecutor(), StackOperation.class).register(registration);
         }
 
-        new TransportRegistration(this.builderFactory).register(registration);
-        new ProtocolRegistration(this.builderFactory).register(registration);
-        new RelayResourceDefinition(this.builderFactory).register(registration);
+        new TransportRegistration(this.serviceConfiguratorFactory).register(registration);
+        new ProtocolRegistration(this.serviceConfiguratorFactory).register(registration);
+        new RelayResourceDefinition(this.serviceConfiguratorFactory).register(registration);
+
+        return registration;
     }
 
     static void operationDeprecated(OperationContext context, ModelNode operation) {

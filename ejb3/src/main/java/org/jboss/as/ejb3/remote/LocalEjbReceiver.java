@@ -204,7 +204,7 @@ public class LocalEjbReceiver extends EJBReceiver {
                             result = view.invoke(interceptorContext);
                         } catch (Exception e) {
                             // WFLY-4331 - clone the exception of an async task
-                            receiverContext.resultReady(new CloningExceptionProducer(invocation, resultCloner, e, allowPassByReference));
+                            receiverContext.resultReady(new CloningExceptionProducer(resultCloner, e));
                             return;
                         }
                         // if the result is null, there is no cloning needed
@@ -225,7 +225,7 @@ public class LocalEjbReceiver extends EJBReceiver {
                                     intr = true;
                                 } catch (ExecutionException e) {
                                     // WFLY-4331 - clone the exception of an async task
-                                    receiverContext.resultReady(new CloningExceptionProducer(invocation, resultCloner, e, allowPassByReference));
+                                    receiverContext.resultReady(new CloningExceptionProducer(resultCloner, e));
                                     return;
                                 }
                             } finally {
@@ -267,11 +267,9 @@ public class LocalEjbReceiver extends EJBReceiver {
             } catch (Exception e) {
                 //we even have to clone the exception type
                 //to make sure it matches
-                receiverContext.resultReady(new CloningExceptionProducer(invocation, resultCloner, e, allowPassByReference));
+                receiverContext.resultReady(new CloningExceptionProducer(resultCloner, e));
                 return;
             }
-            //we do not marshal the return type unless we have to, the spec only says we have to
-            //pass parameters by reference
             receiverContext.resultReady(new CloningResultProducer(invocation, resultCloner, result, allowPassByReference));
 
             for(Map.Entry<String, Object> entry : interceptorContext.getContextData().entrySet()) {
@@ -309,16 +307,12 @@ public class LocalEjbReceiver extends EJBReceiver {
     }
 
     static final class CloningExceptionProducer implements EJBReceiverInvocationContext.ResultProducer {
-        private final EJBClientInvocationContext invocation;
         private final ObjectCloner resultCloner;
         private final Exception exception;
-        private final boolean allowPassByReference;
 
-        CloningExceptionProducer(final EJBClientInvocationContext invocation, final ObjectCloner resultCloner, final Exception exception, final boolean allowPassByReference) {
-            this.invocation = invocation;
+        CloningExceptionProducer(final ObjectCloner resultCloner, final Exception exception) {
             this.resultCloner = resultCloner;
             this.exception = exception;
-            this.allowPassByReference = allowPassByReference;
         }
 
         public Object getResult() throws Exception {
@@ -348,6 +342,7 @@ public class LocalEjbReceiver extends EJBReceiver {
         if (!(component instanceof StatefulSessionComponent)) {
             throw EjbLogger.ROOT_LOGGER.notStatefulSessionBean(statelessLocator.getAppName(), statelessLocator.getModuleName(), statelessLocator.getDistinctName(), statelessLocator.getBeanName());
         }
+        component.waitForComponentStart();
         return ((StatefulSessionComponent) component).createSession();
     }
 

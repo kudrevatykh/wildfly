@@ -22,19 +22,19 @@
 
 package org.wildfly.extension.clustering.singleton;
 
-import java.util.function.Consumer;
+import java.util.function.UnaryOperator;
 
 import org.jboss.as.clustering.controller.CapabilityReference;
 import org.jboss.as.clustering.controller.ChildResourceDefinition;
 import org.jboss.as.clustering.controller.CommonUnaryRequirement;
 import org.jboss.as.clustering.controller.ResourceDescriptor;
-import org.jboss.as.clustering.controller.ResourceServiceBuilderFactory;
+import org.jboss.as.clustering.controller.ResourceServiceConfiguratorFactory;
 import org.jboss.as.clustering.controller.ResourceServiceHandler;
 import org.jboss.as.clustering.controller.SimpleResourceRegistration;
 import org.jboss.as.clustering.controller.SimpleResourceServiceHandler;
+import org.jboss.as.clustering.controller.UnaryCapabilityNameResolver;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.CapabilityReferenceRecorder;
-import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.StringListAttributeDefinition;
 import org.jboss.as.controller.capability.RuntimeCapability;
@@ -60,17 +60,12 @@ public abstract class ElectionPolicyResourceDefinition extends ChildResourceDefi
         private final RuntimeCapability<Void> definition;
 
         Capability(String name, Class<?> type) {
-            this.definition = RuntimeCapability.Builder.of(name, true, type).build();
+            this.definition = RuntimeCapability.Builder.of(name, true).setServiceType(type).setDynamicNameMapper(UnaryCapabilityNameResolver.PARENT).build();
         }
 
         @Override
         public RuntimeCapability<Void> getDefinition() {
             return this.definition;
-        }
-
-        @Override
-        public RuntimeCapability<Void> resolve(PathAddress address) {
-            return this.definition.fromBaseCapability(address.getParent().getLastElement().getValue());
         }
     }
 
@@ -104,25 +99,26 @@ public abstract class ElectionPolicyResourceDefinition extends ChildResourceDefi
         }
     }
 
-    private final Consumer<ResourceDescriptor> configurator;
-    private final ResourceServiceBuilderFactory<SingletonElectionPolicy> builderFactory;
+    private final UnaryOperator<ResourceDescriptor> configurator;
+    private final ResourceServiceConfiguratorFactory serviceConfiguratorFactory;
 
-    ElectionPolicyResourceDefinition(PathElement path, ResourceDescriptionResolver resolver, Consumer<ResourceDescriptor> configurator, ResourceServiceBuilderFactory<SingletonElectionPolicy> builderFactory) {
+    ElectionPolicyResourceDefinition(PathElement path, ResourceDescriptionResolver resolver, UnaryOperator<ResourceDescriptor> configurator, ResourceServiceConfiguratorFactory serviceConfiguratorFactory) {
         super(path, resolver);
         this.configurator = configurator;
-        this.builderFactory = builderFactory;
+        this.serviceConfiguratorFactory = serviceConfiguratorFactory;
     }
 
     @Override
-    public void register(ManagementResourceRegistration parentRegistration) {
-        ManagementResourceRegistration registration = parentRegistration.registerSubModel(this);
+    public ManagementResourceRegistration register(ManagementResourceRegistration parent) {
+        ManagementResourceRegistration registration = parent.registerSubModel(this);
 
-        ResourceDescriptor descriptor = new ResourceDescriptor(this.getResourceDescriptionResolver())
+        ResourceDescriptor descriptor = this.configurator.apply(new ResourceDescriptor(this.getResourceDescriptionResolver()))
                 .addAttributes(ElectionPolicyResourceDefinition.Attribute.class)
                 .addCapabilities(ElectionPolicyResourceDefinition.Capability.class)
                 ;
-        this.configurator.accept(descriptor);
-        ResourceServiceHandler handler = new SimpleResourceServiceHandler<>(this.builderFactory);
+        ResourceServiceHandler handler = new SimpleResourceServiceHandler(this.serviceConfiguratorFactory);
         new SimpleResourceRegistration(descriptor, handler).register(registration);
+
+        return registration;
     }
 }

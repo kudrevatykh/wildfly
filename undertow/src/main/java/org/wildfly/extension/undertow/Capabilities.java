@@ -43,20 +43,20 @@ public final class Capabilities {
     public static final String CAPABILITY_HTTP_INVOKER = "org.wildfly.undertow.http-invoker";
     public static final String CAPABILITY_HTTP_INVOKER_HOST = "org.wildfly.undertow.http-invoker.host";
     public static final String CAPABILITY_APPLICATION_SECURITY_DOMAIN = "org.wildfly.undertow.application-security-domain";
+    public static final String CAPABILITY_APPLICATION_SECURITY_DOMAIN_KNOWN_DEPLOYMENTS = "org.wildfly.undertow.application-security-domain.known-deployments";
     public static final String CAPABILITY_REVERSE_PROXY_HANDLER_HOST = "org.wildfly.undertow.reverse-proxy.host";
-
+    public static final String CAPABILITY_BYTE_BUFFER_POOL = "org.wildfly.undertow.byte-buffer-pool";
 
     /*
     References to capabilities outside of the subsystem
      */
 
     public static final String REF_IO_WORKER = "org.wildfly.io.worker";
-    public static final String REF_BUFFER_POOL = "org.wildfly.io.buffer-pool";
+    public static final String REF_SECURITY_DOMAIN = "org.wildfly.security.security-domain";
     public static final String REF_SOCKET_BINDING = "org.wildfly.network.socket-binding";
     public static final String REF_SSL_CONTEXT = "org.wildfly.security.ssl-context";
     public static final String REF_HTTP_AUTHENTICATION_FACTORY = "org.wildfly.security.http-authentication-factory";
     public static final String REF_JACC_POLICY = "org.wildfly.security.jacc-policy";
     public static final String REF_OUTBOUND_SOCKET = "org.wildfly.network.outbound-socket-binding";
     public static final String REF_REQUEST_CONTROLLER = "org.wildfly.request-controller";
-    public static final String REF_MOD_CLUSTER = "org.wildfly.mod_cluster";
 }

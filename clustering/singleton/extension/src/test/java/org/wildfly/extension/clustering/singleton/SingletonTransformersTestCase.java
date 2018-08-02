@@ -60,6 +60,8 @@ public class SingletonTransformersTestCase extends AbstractSubsystemTest {
         switch (controllerVersion) {
             case EAP_7_0_0:
                 return SingletonModel.VERSION_1_0_0;
+            case EAP_7_1_0:
+                return SingletonModel.VERSION_2_0_0;
             default:
                 throw new IllegalArgumentException();
         }
@@ -68,6 +70,7 @@ public class SingletonTransformersTestCase extends AbstractSubsystemTest {
     private static String[] getDependencies(ModelTestControllerVersion version) {
         switch (version) {
             case EAP_7_0_0:
+            case EAP_7_1_0:
                 return new String[] {
                         formatEAP7SubsystemArtifact(version),
                         formatArtifact("org.jboss.eap:wildfly-clustering-singleton-api:%s", version),
@@ -78,38 +81,49 @@ public class SingletonTransformersTestCase extends AbstractSubsystemTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     protected org.jboss.as.subsystem.test.AdditionalInitialization createAdditionalInitialization() {
         return new AdditionalInitialization()
                 .require(CommonUnaryRequirement.OUTBOUND_SOCKET_BINDING, "binding0", "binding1")
                 .require(SingletonDefaultCacheRequirement.SINGLETON_SERVICE_BUILDER_FACTORY, "singleton-container")
                 .require(SingletonCacheRequirement.SINGLETON_SERVICE_BUILDER_FACTORY, "singleton-container", "singleton-cache")
+                .require(SingletonDefaultCacheRequirement.SINGLETON_SERVICE_CONFIGURATOR_FACTORY, "singleton-container")
+                .require(SingletonCacheRequirement.SINGLETON_SERVICE_CONFIGURATOR_FACTORY, "singleton-container", "singleton-cache")
                 ;
     }
 
     @Test
     public void testTransformerEAP700() throws Exception {
-        testTransformation(ModelTestControllerVersion.EAP_7_0_0);
+        this.testTransformation(ModelTestControllerVersion.EAP_7_0_0);
+    }
+
+    @Test
+    public void testTransformerEAP710() throws Exception {
+        this.testTransformation(ModelTestControllerVersion.EAP_7_1_0);
     }
 
     private void testTransformation(final ModelTestControllerVersion controller) throws Exception {
         final ModelVersion version = getModelVersion(controller).getVersion();
-        final String subsystemXmlResource = String.format("subsystem-transform-%d_%d_%d.xml", version.getMajor(), version.getMinor(), version.getMicro());
         final String[] dependencies = getDependencies(controller);
 
-        KernelServices services = this.buildKernelServices(subsystemXmlResource, controller, version, dependencies);
+        KernelServices services = this.buildKernelServices("subsystem-transform.xml", controller, version, dependencies);
 
         checkSubsystemModelTransformation(services, version, null, false);
     }
 
     @Test
     public void testRejectionsEAP700() throws Exception {
-        testRejections(ModelTestControllerVersion.EAP_7_0_0);
+        this.testRejections(ModelTestControllerVersion.EAP_7_0_0);
+    }
+
+    @Test
+    public void testRejectionsEAP710() throws Exception {
+        this.testRejections(ModelTestControllerVersion.EAP_7_1_0);
     }
 
     private void testRejections(final ModelTestControllerVersion controller) throws Exception {
-        final ModelVersion version = getModelVersion(controller).getVersion();
-        final String subsystemXmlResource = String.format("subsystem-reject-%d_%d_%d.xml", version.getMajor(), version.getMinor(), version.getMicro());
-        final String[] dependencies = getDependencies(controller);
+        ModelVersion version = getModelVersion(controller).getVersion();
+        String[] dependencies = getDependencies(controller);
 
         // create builder for current subsystem version
         KernelServicesBuilder builder = createKernelServicesBuilder();
@@ -127,7 +141,7 @@ public class SingletonTransformersTestCase extends AbstractSubsystemTest {
         Assert.assertTrue(legacyServices.isSuccessfulBoot());
 
         // test failed operations involving backups
-        List<ModelNode> xmlOps = builder.parseXmlResource(subsystemXmlResource);
+        List<ModelNode> xmlOps = builder.parseXmlResource("subsystem-reject.xml");
         ModelTestUtils.checkFailedTransformedBootOperations(services, version, xmlOps, createFailedOperationConfig(version));
     }
 

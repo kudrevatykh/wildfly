@@ -26,16 +26,21 @@ import java.util.Arrays;
 import java.util.Collection;
 
 import org.jboss.as.clustering.controller.Attribute;
+import org.jboss.as.clustering.controller.CapabilityProvider;
 import org.jboss.as.clustering.controller.ResourceDefinitionProvider;
 import org.jboss.as.clustering.controller.ResourceDescriptor;
-import org.jboss.as.clustering.controller.SimpleResourceRegistration;
+import org.jboss.as.clustering.controller.ResourceServiceConfigurator;
+import org.jboss.as.clustering.controller.ResourceServiceConfiguratorFactory;
 import org.jboss.as.clustering.controller.ResourceServiceHandler;
 import org.jboss.as.clustering.controller.SimpleAttribute;
+import org.jboss.as.clustering.controller.SimpleResourceRegistration;
 import org.jboss.as.clustering.controller.SimpleResourceServiceHandler;
 import org.jboss.as.clustering.controller.transform.UndefinedAttributesDiscardPolicy;
 import org.jboss.as.clustering.controller.validation.IntRangeValidatorBuilder;
 import org.jboss.as.clustering.controller.validation.LongRangeValidatorBuilder;
 import org.jboss.as.clustering.controller.validation.ParameterValidatorBuilder;
+import org.jboss.as.clustering.infinispan.subsystem.remote.ClientThreadPoolServiceConfigurator;
+import org.jboss.as.clustering.infinispan.subsystem.remote.RemoteCacheContainerResourceDefinition;
 import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
@@ -53,20 +58,22 @@ import org.jboss.msc.service.ServiceName;
 
 /**
  * Thread pool resource definitions for Infinispan subsystem. See {@link org.infinispan.factories.KnownComponentNames}
- * and {@link org.infinispan.commons.executors.BlockingThreadPoolExecutorFactory#create(int, int)} for the hardcoded
+ * and {@link org.infinispan.commons.executors.BlockingThreadPoolExecutorFactory#create} for the hardcoded
  * Infinispan default values.
  *
  * @author Radoslav Husar
- * @version February 2015
  */
 public enum ThreadPoolResourceDefinition implements ResourceDefinitionProvider, ThreadPoolDefinition {
 
-    ASYNC_OPERATIONS("async-operations", 25, 25, 1000, 60000L),
-    LISTENER("listener", 1, 1, 100000, 60000L),
-    PERSISTENCE("persistence", 1, 4, 0, 60000L),
-    REMOTE_COMMAND("remote-command", 1, 200, 0, 60000L),
-    STATE_TRANSFER("state-transfer", 1, 60, 0, 60000L),
-    TRANSPORT("transport", 25, 25, 100000, 60000L),
+    // cache-container
+    ASYNC_OPERATIONS("async-operations", 25, 25, 1000, 60000L, CacheContainerResourceDefinition.Capability.CONFIGURATION),
+    LISTENER("listener", 1, 1, 100000, 60000L, CacheContainerResourceDefinition.Capability.CONFIGURATION),
+    PERSISTENCE("persistence", 1, 4, 0, 60000L, CacheContainerResourceDefinition.Capability.CONFIGURATION, InfinispanModel.VERSION_8_0_0),
+    REMOTE_COMMAND("remote-command", 1, 200, 0, 60000L, CacheContainerResourceDefinition.Capability.CONFIGURATION),
+    STATE_TRANSFER("state-transfer", 1, 60, 0, 60000L, CacheContainerResourceDefinition.Capability.CONFIGURATION),
+    TRANSPORT("transport", 25, 25, 100000, 60000L, CacheContainerResourceDefinition.Capability.CONFIGURATION),
+    // remote-cache-container
+    CLIENT("async", 99, 99, 10000, 0L, RemoteCacheContainerResourceDefinition.Capability.CONFIGURATION),
     ;
 
     static final PathElement WILDCARD_PATH = pathElement(PathElement.WILDCARD_VALUE);
@@ -80,17 +87,33 @@ public enum ThreadPoolResourceDefinition implements ResourceDefinitionProvider, 
     private final Attribute maxThreads;
     private final Attribute queueLength;
     private final Attribute keepAliveTime;
+    private final CapabilityProvider baseCapability;
+    private final ResourceServiceConfiguratorFactory serviceConfiguratorFactory;
 
-    ThreadPoolResourceDefinition(String name, int defaultMinThreads, int defaultMaxThreads, int defaultQueueLength, long defaultKeepaliveTime) {
-        PathElement path = pathElement(name);
-        this.definition = new SimpleResourceDefinition(path, InfinispanExtension.SUBSYSTEM_RESOLVER.createChildResolver(path, pathElement(PathElement.WILDCARD_VALUE)));
-        this.minThreads = new SimpleAttribute(createBuilder("min-threads", ModelType.INT, new ModelNode(defaultMinThreads), new IntRangeValidatorBuilder().min(0)).build());
-        this.maxThreads = new SimpleAttribute(createBuilder("max-threads", ModelType.INT, new ModelNode(defaultMaxThreads), new IntRangeValidatorBuilder().min(0)).build());
-        this.queueLength = new SimpleAttribute(createBuilder("queue-length", ModelType.INT, new ModelNode(defaultQueueLength), new IntRangeValidatorBuilder().min(0)).build());
-        this.keepAliveTime = new SimpleAttribute(createBuilder("keepalive-time", ModelType.LONG, new ModelNode(defaultKeepaliveTime), new LongRangeValidatorBuilder().min(0)).build());
+    ThreadPoolResourceDefinition(String name, int defaultMinThreads, int defaultMaxThreads, int defaultQueueLength, long defaultKeepaliveTime, CapabilityProvider baseCapability) {
+        this(name, defaultMinThreads, defaultMaxThreads, defaultQueueLength, defaultKeepaliveTime, baseCapability, null);
     }
 
-    private static SimpleAttributeDefinitionBuilder createBuilder(String name, ModelType type, ModelNode defaultValue, ParameterValidatorBuilder validatorBuilder) {
+    ThreadPoolResourceDefinition(String name, int defaultMinThreads, int defaultMaxThreads, int defaultQueueLength, long defaultKeepaliveTime, CapabilityProvider baseCapability, InfinispanModel scheduledThreadPool) {
+        PathElement path = pathElement(name);
+        this.definition = new SimpleResourceDefinition(path, InfinispanExtension.SUBSYSTEM_RESOLVER.createChildResolver(path, pathElement(PathElement.WILDCARD_VALUE)));
+        this.minThreads = new SimpleAttribute(createBuilder("min-threads", ModelType.INT, new ModelNode(defaultMinThreads), new IntRangeValidatorBuilder().min(0), scheduledThreadPool).build());
+        this.maxThreads = new SimpleAttribute(createBuilder("max-threads", ModelType.INT, new ModelNode(defaultMaxThreads), new IntRangeValidatorBuilder().min(0), null).build());
+        this.queueLength = new SimpleAttribute(createBuilder("queue-length", ModelType.INT, new ModelNode(defaultQueueLength), new IntRangeValidatorBuilder().min(0), scheduledThreadPool).build());
+        this.keepAliveTime = new SimpleAttribute(createBuilder("keepalive-time", ModelType.LONG, new ModelNode(defaultKeepaliveTime), new LongRangeValidatorBuilder().min(0), null).build());
+        this.baseCapability = baseCapability;
+        this.serviceConfiguratorFactory = new ResourceServiceConfiguratorFactory() {
+            @Override
+            public ResourceServiceConfigurator createServiceConfigurator(PathAddress address) {
+                if (baseCapability == RemoteCacheContainerResourceDefinition.Capability.CONFIGURATION) {
+                    return new ClientThreadPoolServiceConfigurator(ThreadPoolResourceDefinition.this, address);
+                }
+                return (scheduledThreadPool != null) ? new ScheduledThreadPoolServiceConfigurator(ThreadPoolResourceDefinition.this, address) : new ThreadPoolServiceConfigurator(ThreadPoolResourceDefinition.this, address);
+            }
+        };
+    }
+
+    private static SimpleAttributeDefinitionBuilder createBuilder(String name, ModelType type, ModelNode defaultValue, ParameterValidatorBuilder validatorBuilder, InfinispanModel deprecation) {
         SimpleAttributeDefinitionBuilder builder = new SimpleAttributeDefinitionBuilder(name, type)
                 .setAllowExpression(true)
                 .setRequired(false)
@@ -98,6 +121,9 @@ public enum ThreadPoolResourceDefinition implements ResourceDefinitionProvider, 
                 .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
                 .setMeasurementUnit((type == ModelType.LONG) ? MeasurementUnit.MILLISECONDS : null)
                 ;
+        if (deprecation != null) {
+            builder.setDeprecated(deprecation.getVersion());
+        }
         return builder.setValidator(validatorBuilder.configure(builder).build());
     }
 
@@ -110,13 +136,13 @@ public enum ThreadPoolResourceDefinition implements ResourceDefinitionProvider, 
     public void register(ManagementResourceRegistration parent) {
         ManagementResourceRegistration registration = parent.registerSubModel(this);
         ResourceDescriptor descriptor = new ResourceDescriptor(this.definition.getResourceDescriptionResolver()).addAttributes(this.getAttributes());
-        ResourceServiceHandler handler = new SimpleResourceServiceHandler<>(address -> new ThreadPoolBuilder(this, address.getParent()));
+        ResourceServiceHandler handler = new SimpleResourceServiceHandler(this.serviceConfiguratorFactory);
         new SimpleResourceRegistration(descriptor, handler).register(registration);
     }
 
     @Override
     public ServiceName getServiceName(PathAddress containerAddress) {
-        return CacheContainerResourceDefinition.Capability.CONFIGURATION.getServiceName(containerAddress).append(this.getPathElement().getKeyValuePair());
+        return this.baseCapability.getServiceName(containerAddress).append(this.getPathElement().getKeyValuePair());
     }
 
     @Override
@@ -143,7 +169,7 @@ public enum ThreadPoolResourceDefinition implements ResourceDefinitionProvider, 
         return Arrays.asList(this.minThreads, this.maxThreads, this.queueLength, this.keepAliveTime);
     }
 
-    void buildTransformation(ModelVersion version, ResourceTransformationDescriptionBuilder parent) {
+    public void buildTransformation(ModelVersion version, ResourceTransformationDescriptionBuilder parent) {
         // Nothing to transform yet
     }
 

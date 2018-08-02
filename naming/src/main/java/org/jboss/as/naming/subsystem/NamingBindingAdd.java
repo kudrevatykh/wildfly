@@ -57,6 +57,7 @@ import org.jboss.dmr.ModelNode;
 import org.jboss.modules.Module;
 import org.jboss.modules.ModuleIdentifier;
 import org.jboss.modules.ModuleLoadException;
+import org.jboss.modules.ModuleNotFoundException;
 import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceTarget;
 import org.jboss.msc.value.ImmediateValue;
@@ -166,6 +167,8 @@ public class NamingBindingAdd extends AbstractAddStepHandler {
         final Module module;
         try {
             module = Module.getBootModuleLoader().loadModule(moduleID);
+        } catch (ModuleNotFoundException e) {
+            throw NamingLogger.ROOT_LOGGER.moduleNotFound(moduleID, e.getMessage());
         } catch (ModuleLoadException e) {
             throw NamingLogger.ROOT_LOGGER.couldNotLoadModule(moduleID);
         }
@@ -395,7 +398,7 @@ public class NamingBindingAdd extends AbstractAddStepHandler {
         private final String name;
         private final Hashtable<String, String> environment;
 
-        public ObjectFactoryManagedReference(ObjectFactory objectFactoryClassInstance, String name, Hashtable<String, String> environment) {
+        ObjectFactoryManagedReference(ObjectFactory objectFactoryClassInstance, String name, Hashtable<String, String> environment) {
             this.objectFactoryClassInstance = objectFactoryClassInstance;
             this.name = name;
             this.environment = environment;
@@ -438,7 +441,7 @@ public class NamingBindingAdd extends AbstractAddStepHandler {
     private static class LookupManagedReferenceFactory implements ManagedReferenceFactory {
         private final String lookup;
 
-        public LookupManagedReferenceFactory(String lookup) {
+        LookupManagedReferenceFactory(String lookup) {
             this.lookup = lookup;
         }
 

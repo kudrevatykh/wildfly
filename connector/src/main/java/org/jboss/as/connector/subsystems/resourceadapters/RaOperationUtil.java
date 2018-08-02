@@ -116,6 +116,7 @@ import org.jboss.as.connector.util.ModelNodeUtil;
 import org.jboss.as.connector.util.RaServicesFactory;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
+import org.jboss.as.controller.UninterruptibleCountDownLatch;
 import org.jboss.as.security.service.SecurityDomainService;
 import org.jboss.as.server.deployment.Attachments;
 import org.jboss.as.server.deployment.annotation.ResourceRootIndexer;
@@ -146,7 +147,9 @@ import org.jboss.jca.common.metadata.resourceadapter.WorkManagerImpl;
 import org.jboss.modules.Module;
 import org.jboss.modules.ModuleIdentifier;
 import org.jboss.modules.ModuleLoadException;
-import org.jboss.msc.service.AbstractServiceListener;
+import org.jboss.modules.ModuleNotFoundException;
+import org.jboss.msc.service.LifecycleEvent;
+import org.jboss.msc.service.LifecycleListener;
 import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceName;
@@ -261,7 +264,7 @@ public class RaOperationUtil {
 
         boolean application = ModelNodeUtil.getBooleanIfSetOrGetDefault(context, connDefModel, APPLICATION);
         Security security = null;
-        if (securityDomain != null || securityDomainAndApplication != null || application) {
+        if (securityDomain != null || authenticationContext != null || securityDomainAndApplication != null || authenticationContextAndApplication != null || application) {
             security = new SecurityImpl(elytronEnabled? authenticationContext: securityDomain,
                     elytronEnabled? authenticationContextAndApplication: securityDomainAndApplication, application,
                     elytronEnabled);
@@ -282,10 +285,10 @@ public class RaOperationUtil {
 
 
         Recovery recovery = null;
-        if ((recoveryUsername != null && (recoveryPassword != null || recoveryCredentialSourceSupplier != null)) || recoverySecurityDomain != null || noRecovery != null) {
+        if ((recoveryUsername != null && (recoveryPassword != null || recoveryCredentialSourceSupplier != null)) || recoverySecurityDomain != null || recoveryAuthenticationContext != null || noRecovery != null) {
             Credential credential = null;
 
-            if ((recoveryUsername != null && (recoveryPassword != null || recoveryCredentialSourceSupplier != null)) || recoverySecurityDomain != null)
+            if ((recoveryUsername != null && (recoveryPassword != null || recoveryCredentialSourceSupplier != null)) || recoverySecurityDomain != null || recoveryAuthenticationContext != null)
                 credential = new CredentialImpl(recoveryUsername, recoveryPassword,
                         recoveryElytronEnabled ? recoveryAuthenticationContext : recoverySecurityDomain, recoveryElytronEnabled, recoveryCredentialSourceSupplier);
 
@@ -324,29 +327,28 @@ public class RaOperationUtil {
 
             if (raServiceController != null) {
                 final org.jboss.msc.service.ServiceController.Mode originalMode = raServiceController.getMode();
-                raServiceController.addListener(new AbstractServiceListener() {
+                final UninterruptibleCountDownLatch latch = new UninterruptibleCountDownLatch(1);
+                raServiceController.addListener(new LifecycleListener() {
                     @Override
-                    public void transition(ServiceController controller, ServiceController.Transition transition) {
-                        switch (transition) {
-                            case STOPPING_to_DOWN:
-                                try {
-                                    final ServiceController<?> RaxmlController = registry.getService(ServiceName.of(ConnectorServices.RA_SERVICE, id));
-                                    Activation raxml = (Activation) RaxmlController.getValue();
-                                    ((ResourceAdapterXmlDeploymentService) controller.getService()).setRaxml(raxml);
-                                    controller.compareAndSetMode(ServiceController.Mode.NEVER, originalMode);
-                                } finally {
-                                    controller.removeListener(this);
-                                }
-
+                    public void handleEvent(ServiceController controller, LifecycleEvent event) {
+                        latch.awaitUninterruptibly();
+                        if (event == LifecycleEvent.DOWN) {
+                            try {
+                                final ServiceController<?> RaxmlController = registry.getService(ServiceName.of(ConnectorServices.RA_SERVICE, id));
+                                Activation raxml = (Activation) RaxmlController.getValue();
+                                ((ResourceAdapterXmlDeploymentService) controller.getService()).setRaxml(raxml);
+                                controller.compareAndSetMode(ServiceController.Mode.NEVER, originalMode);
+                            } finally {
+                                controller.removeListener(this);
+                            }
                         }
                     }
-
-                    @Override
-                    public void listenerAdded(ServiceController controller) {
-                        controller.setMode(ServiceController.Mode.NEVER);
-                    }
-
                 });
+                try {
+                    raServiceController.setMode(ServiceController.Mode.NEVER);
+                } finally {
+                    latch.countDown();
+                }
                 return raDeploymentServiceName;
             } else {
                 return null;
@@ -477,6 +479,8 @@ public class RaOperationUtil {
         try {
             ModuleIdentifier moduleId = ModuleIdentifier.create(moduleName, slot);
             module = Module.getCallerModuleLoader().loadModule(moduleId);
+        } catch (ModuleNotFoundException e) {
+            throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.raModuleNotFound(moduleName, e.getMessage()), e);
         } catch (ModuleLoadException e) {
             throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.failedToLoadModuleRA(moduleName), e);
         }

@@ -29,6 +29,7 @@ import static org.jboss.as.connector.subsystems.datasources.Constants.DRIVER_MAJ
 import static org.jboss.as.connector.subsystems.datasources.Constants.DRIVER_MINOR_VERSION;
 import static org.jboss.as.connector.subsystems.datasources.Constants.DRIVER_MODULE_NAME;
 import static org.jboss.as.connector.subsystems.datasources.Constants.DRIVER_NAME;
+import static org.jboss.as.connector.subsystems.datasources.Constants.DRIVER_NAME_NAME;
 import static org.jboss.as.connector.subsystems.datasources.Constants.DRIVER_XA_DATASOURCE_CLASS_NAME;
 import static org.jboss.as.connector.subsystems.datasources.Constants.MODULE_SLOT;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
@@ -51,6 +52,7 @@ import org.jboss.dmr.ModelNode;
 import org.jboss.modules.Module;
 import org.jboss.modules.ModuleIdentifier;
 import org.jboss.modules.ModuleLoadException;
+import org.jboss.modules.ModuleNotFoundException;
 import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceName;
@@ -69,7 +71,10 @@ public class JdbcDriverAdd extends AbstractAddStepHandler {
         final String driverName = PathAddress.pathAddress(address).getLastElement().getValue();
 
         for (AttributeDefinition attribute : Constants.JDBC_DRIVER_ATTRIBUTES) {
-            attribute.validateAndSet(operation, model);
+            // https://issues.jboss.org/browse/WFLY-9324 skip validation on driver-name
+            if (!attribute.getName().equals(DRIVER_NAME_NAME)) {
+                attribute.validateAndSet(operation, model);
+            }
         }
         model.get(DRIVER_NAME.getName()).set(driverName);//this shouldn't be here anymore
     }
@@ -96,6 +101,8 @@ public class JdbcDriverAdd extends AbstractAddStepHandler {
         try {
             moduleId = ModuleIdentifier.create(moduleName, slot);
             module = Module.getCallerModuleLoader().loadModule(moduleId);
+        } catch (ModuleNotFoundException e) {
+            throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.missingDependencyInModuleDriver(moduleName, e.getMessage()), e);
         } catch (ModuleLoadException e) {
             throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.failedToLoadModuleDriver(moduleName), e);
         }

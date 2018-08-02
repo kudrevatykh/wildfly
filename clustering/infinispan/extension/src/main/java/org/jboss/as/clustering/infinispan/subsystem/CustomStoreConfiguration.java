@@ -30,6 +30,7 @@ import org.infinispan.configuration.cache.SingletonStoreConfiguration;
 /**
  * @author Paul Ferraro
  */
+@SuppressWarnings("deprecation")
 public class CustomStoreConfiguration extends AbstractStoreConfiguration {
 
     public CustomStoreConfiguration(AttributeSet attributes, AsyncStoreConfiguration async, SingletonStoreConfiguration singletonStore) {

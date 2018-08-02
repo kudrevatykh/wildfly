@@ -36,6 +36,7 @@ import java.lang.reflect.ReflectPermission;
 import java.sql.Connection;
 import java.util.HashMap;
 import java.util.Map;
+import java.io.FilePermission;
 import java.util.PropertyPermission;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Resource;
@@ -122,6 +123,7 @@ public abstract class AbstractDatasourceCapacityPoliciesTestCase extends JcaMgmt
         jar.addAsManifestResource(createPermissionsXmlAsset(
                 new RemotingPermission("createEndpoint"),
                 new RemotingPermission("connect"),
+                new FilePermission(System.getProperty("jboss.inst") + "/standalone/tmp/auth/*", "read"),
                 new PropertyPermission("ts.timeout.factor", "read"),
                 new RuntimePermission("accessDeclaredMembers"),
                 new ReflectPermission("suppressAccessChecks")
@@ -226,11 +228,6 @@ public abstract class AbstractDatasourceCapacityPoliciesTestCase extends JcaMgmt
 
         }
 
-        @Override
-        public void tearDown(final ManagementClient managementClient, final String containerId) throws Exception {
-            removeDatasource();
-        }
-
         private void createDatasource(CapacityConfiguration capacityConfiguration) throws Exception {
             ModelNode addOperation = new ModelNode();
             addOperation.get(OP).set(ADD);
@@ -290,15 +287,6 @@ public abstract class AbstractDatasourceCapacityPoliciesTestCase extends JcaMgmt
             }
 
             writeAttribute(xa ? XA_DS_ADDRESS : DS_ADDRESS, ENABLED, "true");
-            reload();
-        }
-
-        private void removeDatasource() throws Exception {
-            if (xa) {
-                remove(XA_DS_ADDRESS);
-            } else {
-                remove(DS_ADDRESS);
-            }
             reload();
         }
     }

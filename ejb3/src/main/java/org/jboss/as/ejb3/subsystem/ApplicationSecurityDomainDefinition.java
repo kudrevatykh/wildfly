@@ -122,7 +122,9 @@ public class ApplicationSecurityDomainDefinition extends SimpleResourceDefinitio
         for (AttributeDefinition attribute: ATTRIBUTES) {
             resourceRegistration.registerReadWriteAttribute(attribute,  null, handler);
         }
-        resourceRegistration.registerReadOnlyAttribute(REFERENCING_DEPLOYMENTS, new ReferencingDeploymentsHandler());
+        if (resourceRegistration.getProcessType().isServer()) {
+            resourceRegistration.registerReadOnlyAttribute(REFERENCING_DEPLOYMENTS, new ReferencingDeploymentsHandler());
+        }
     }
 
     private static class AddHandler extends AbstractAddStepHandler {
@@ -160,7 +162,7 @@ public class ApplicationSecurityDomainDefinition extends SimpleResourceDefinitio
 
             if (model.hasDefined(ENABLE_JACC.getName())) {
                 if (ENABLE_JACC.resolveModelAttribute(context, model).asBoolean()) {
-                    serviceBuilder.addDependency(ServiceBuilder.DependencyType.REQUIRED, context.getCapabilityServiceName(JACC_POLICY_CAPABILITY, Policy.class));
+                    serviceBuilder.addDependency(context.getCapabilityServiceName(JACC_POLICY_CAPABILITY, Policy.class));
                 }
             }
 
@@ -177,11 +179,16 @@ public class ApplicationSecurityDomainDefinition extends SimpleResourceDefinitio
         @Override
         protected void performRemove(OperationContext context, ModelNode operation, ModelNode model) throws OperationFailedException {
             super.performRemove(context, operation, model);
-            for (ApplicationSecurityDomainConfig domain : new HashSet<>(knownApplicationSecurityDomains)) {
+            HashSet<ApplicationSecurityDomainConfig> applicationSecurityDomainConfigs;
+            synchronized (knownApplicationSecurityDomains) {
+                applicationSecurityDomainConfigs = new HashSet<>(knownApplicationSecurityDomains);
+            }
+            for (ApplicationSecurityDomainConfig domain : applicationSecurityDomainConfigs) {
                 if (domain.isSameDomain(context.getCurrentAddressValue())) {
                     knownApplicationSecurityDomains.remove(domain);
                 }
             }
+
         }
 
         @Override
@@ -195,25 +202,38 @@ public class ApplicationSecurityDomainDefinition extends SimpleResourceDefinitio
 
         @Override
         public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
-            RuntimeCapability<Void> runtimeCapability = APPLICATION_SECURITY_DOMAIN_RUNTIME_CAPABILITY.fromBaseCapability(context.getCurrentAddressValue());
-            ServiceName serviceName = runtimeCapability.getCapabilityServiceName(ApplicationSecurityDomain.class);
-            ServiceRegistry serviceRegistry = context.getServiceRegistry(false);
-            ServiceController<?> controller = serviceRegistry.getRequiredService(serviceName);
+            if (context.isDefaultRequiresRuntime()) {
+                context.addStep((ctx, op) -> {
+                    RuntimeCapability<Void> runtimeCapability = APPLICATION_SECURITY_DOMAIN_RUNTIME_CAPABILITY.fromBaseCapability(context.getCurrentAddressValue());
+                    ServiceName serviceName = runtimeCapability.getCapabilityServiceName(ApplicationSecurityDomain.class);
+                    ServiceRegistry serviceRegistry = context.getServiceRegistry(false);
+                    ServiceController<?> controller = serviceRegistry.getRequiredService(serviceName);
 
-            ModelNode deploymentList = new ModelNode();
-            if (controller.getState() == State.UP) {
-                Service service = controller.getService();
-                if (service instanceof ApplicationSecurityDomainService) {
-                    for (String current : ((ApplicationSecurityDomainService) service).getDeployments()) {
-                        deploymentList.add(current);
+                    ModelNode deploymentList = new ModelNode();
+                    if (controller.getState() == State.UP) {
+                        Service service = controller.getService();
+                        if (service instanceof ApplicationSecurityDomainService) {
+                            for (String current : ((ApplicationSecurityDomainService) service).getDeployments()) {
+                                deploymentList.add(current);
+                            }
+                        }
                     }
-                }
+                    context.getResult().set(deploymentList);
+                }, OperationContext.Stage.RUNTIME);
             }
-            context.getResult().set(deploymentList);
         }
     }
 
     Function<String, ApplicationSecurityDomainConfig> getKnownSecurityDomainFunction() {
-        return name -> knownApplicationSecurityDomains.stream().filter(applicationSecurityDomainConfig -> applicationSecurityDomainConfig.isSameDomain(name)).findFirst().orElse(null);
+        return name -> {
+            synchronized (knownApplicationSecurityDomains) {
+                for (ApplicationSecurityDomainConfig applicationSecurityDomainConfig : knownApplicationSecurityDomains) {
+                    if (applicationSecurityDomainConfig.isSameDomain(name)) {
+                        return applicationSecurityDomainConfig;
+                    }
+                }
+            }
+            return null;
+        };
     }
 }

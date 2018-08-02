@@ -28,18 +28,16 @@ import java.io.ObjectOutput;
 import java.util.Collections;
 import java.util.Map;
 
-import org.kohsuke.MetaInfServices;
 import org.wildfly.clustering.marshalling.Externalizer;
 
 /**
  * @author Paul Ferraro
  */
-@MetaInfServices(Externalizer.class)
 public class SingletonMapExternalizer implements Externalizer<Map<Object, Object>> {
 
     @Override
     public void writeObject(ObjectOutput output, Map<Object, Object> map) throws IOException {
-        Map.Entry<Object, Object> entry = map.entrySet().stream().findFirst().get();
+        Map.Entry<Object, Object> entry = map.entrySet().iterator().next();
         output.writeObject(entry.getKey());
         output.writeObject(entry.getValue());
     }

@@ -24,6 +24,8 @@ package org.jboss.as.test.integration.ejb.remote.client.api.tx;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
 
+import java.io.File;
+
 import javax.transaction.TransactionManager;
 import javax.transaction.TransactionSynchronizationRegistry;
 
@@ -47,6 +49,9 @@ import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.EnterpriseArchive;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
+import org.jboss.tm.XAResourceRecovery;
+import org.jboss.tm.XAResourceRecoveryRegistry;
+
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -116,6 +121,14 @@ public class EJBClientXidTransactionTestCase {
         builder.setXATerminator(xat).setExtendedJBossXATerminator(xat);
         builder.setTransactionManager(narayanaTm);
         builder.setTransactionSynchronizationRegistry(narayanaTsr);
+        builder.setXAResourceRecoveryRegistry(new XAResourceRecoveryRegistry() {
+            @Override public void addXAResourceRecovery(
+                  XAResourceRecovery xaResourceRecovery) {}
+
+            @Override public void removeXAResourceRecovery(
+                  XAResourceRecovery xaResourceRecovery) {}
+        });
+        builder.setXARecoveryLogDirRelativeToPath(new File("target").toPath());
         LocalTransactionContext.getContextManager().setGlobalDefault(new LocalTransactionContext(builder.build()));
         txManager = ContextTransactionManager.getInstance();
         txSyncRegistry = ContextTransactionSynchronizationRegistry.getInstance();

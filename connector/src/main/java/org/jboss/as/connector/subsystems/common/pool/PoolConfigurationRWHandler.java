@@ -113,7 +113,8 @@ public class PoolConfigurationRWHandler {
 
             return (IDLETIMEOUTMINUTES.getName().equals(parameterName) || BACKGROUNDVALIDATION.getName().equals(parameterName)
                     || BACKGROUNDVALIDATIONMILLIS.getName().equals(parameterName)
-                    || POOL_PREFILL.getName().equals(parameterName) || POOL_FLUSH_STRATEGY.getName().equals(parameterName));
+                    || POOL_PREFILL.getName().equals(parameterName) || POOL_FLUSH_STRATEGY.getName().equals(parameterName)
+                    || MAX_POOL_SIZE.getName().equals(parameterName) || MIN_POOL_SIZE.getName().equals(parameterName));
 
         }
 
@@ -136,10 +137,10 @@ public class PoolConfigurationRWHandler {
                     pc.setMinSize(newValue.asInt());
                 }
                 if (INITIAL_POOL_SIZE.getName().equals(parameterName)) {
-                    pc.setInitialSize(newValue.asInt());
+                    pc.setInitialSize(newValue.isDefined()? newValue.asInt(): 0);
                 }
                 if (BLOCKING_TIMEOUT_WAIT_MILLIS.getName().equals(parameterName)) {
-                    pc.setBlockingTimeout(newValue.asLong());
+                    pc.setBlockingTimeout(newValue.isDefined()? newValue.asLong(): 0);
                 }
                 if (POOL_USE_STRICT_MIN.getName().equals(parameterName)) {
                     pc.setStrictMin(newValue.asBoolean());

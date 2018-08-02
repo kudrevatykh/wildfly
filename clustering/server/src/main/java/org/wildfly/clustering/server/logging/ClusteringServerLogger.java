@@ -87,7 +87,7 @@ public interface ClusteringServerLogger extends BasicLogger {
 
     @LogMessage(level = WARN)
     @Message(id = 10, value = "Failed to purge %s/%s registry of old registry entries for: %s")
-    void registryPurgeFailed(@Cause Throwable e, String containerName, String cacheName, Collection<Node> nodes);
+    void registryPurgeFailed(@Cause Throwable e, String containerName, String cacheName, Collection<?> members);
 
     @LogMessage(level = WARN)
     @Message(id = 11, value = "Failed to notify %s/%s registry listener of %s(%s) event")
@@ -107,4 +107,10 @@ public interface ClusteringServerLogger extends BasicLogger {
     @LogMessage(level = WARN)
     @Message(id = 15, value = "Failed to restore local %s/%s registry entry following network partititon merge")
     void failedToRestoreLocalRegistryEntry(@Cause Throwable cause, String containerName, String cacheName);
+
+    @Message(id = 16, value = "A command dispatcher already exists for %s")
+    IllegalArgumentException commandDispatcherAlreadyExists(Object id);
+
+    @Message(id = 17, value ="A command dispatcher for %s already exists, but with a different command context")
+    IllegalArgumentException commandDispatcherContextMismatch(Object id);
 }

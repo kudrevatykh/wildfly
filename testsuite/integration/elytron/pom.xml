@@ -30,7 +30,11 @@
     <parent>
         <groupId>org.wildfly</groupId>
         <artifactId>wildfly-ts-integ</artifactId>
-        <version>11.0.0.Final-SNAPSHOT</version>
+        <!--
+        Maintain separation between the artifact id and the version to help prevent
+        merge conflicts between commits changing the GA and those changing the V.
+        -->
+        <version>14.0.0.Beta2-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -43,8 +47,8 @@
 
     <properties>
         <wildfly.instance.name>wildfly</wildfly.instance.name>
-        <wildfly.dir>${basedir}/target/${wildfly.instance.name}</wildfly.dir>
-        <jboss.dist>${wildfly.dir}</jboss.dist>
+        <jboss.dist>${basedir}/target/${wildfly.instance.name}</jboss.dist>
+        <wildfly.dir>${jboss.dist}</wildfly.dir>
 
         <enforcer.skip>true</enforcer.skip>
     </properties>
@@ -55,16 +59,9 @@
             <artifactId>jboss-logmanager</artifactId>
             <scope>test</scope>
         </dependency>
-
         <dependency>
-            <groupId>org.wildfly</groupId>
+            <groupId>${project.groupId}</groupId>
             <artifactId>wildfly-testsuite-shared</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.jboss.arquillian.junit</groupId>
-            <artifactId>arquillian-junit-container</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -79,22 +76,62 @@
             <testResource>
                 <directory>src/test/resources</directory>
             </testResource>
+            <testResource>
+                <directory>src/test/java</directory>
+            </testResource>
         </testResources>
         <plugins>
-            <!-- Build the target/wildfly server configuration. -->
             <plugin>
-                <groupId>org.wildfly.build</groupId>
-                <artifactId>wildfly-server-provisioning-maven-plugin</artifactId>
+                <groupId>org.jboss.galleon</groupId>
+                <artifactId>galleon-maven-plugin</artifactId>
                 <executions>
                     <execution>
                         <id>server-provisioning</id>
                         <goals>
-                            <goal>build</goal>
+                            <goal>provision</goal>
                         </goals>
-                        <phase>process-test-resources</phase>
+                        <phase>generate-test-resources</phase>
                         <configuration>
-                            <config-file>server-provisioning.xml</config-file>
-                            <server-name>${wildfly.instance.name}</server-name>
+                            <install-dir>${project.build.directory}/${wildfly.instance.name}</install-dir>
+                            <resolve-locals>
+                                <resolve-local>
+                                    <groupId>org.wildfly.core</groupId>
+                                    <artifactId>wildfly-core-galleon-pack</artifactId>
+                                    <version>${version.org.wildfly.core}</version>
+                                </resolve-local>
+                                <resolve-local>
+                                    <groupId>${project.groupId}</groupId>
+                                    <artifactId>wildfly-servlet-galleon-pack</artifactId>
+                                    <version>${project.version}</version>
+                                </resolve-local>
+                            </resolve-locals>
+                            <feature-packs>
+                                <feature-pack>
+                                    <groupId>${project.groupId}</groupId>
+                                    <artifactId>wildfly-galleon-pack</artifactId>
+                                    <version>${project.version}</version>
+                                    <excluded-packages>
+                                        <name>product.conf</name>
+                                        <name>docs</name>
+                                        <name>docs.licenses.merge</name>
+                                    </excluded-packages>
+                                    <inherit-configs>false</inherit-configs>
+                                    <included-configs>
+                                        <config>
+                                            <model>standalone</model>
+                                            <name>standalone.xml</name>
+                                        </config>
+                                        <config>
+                                            <model>standalone</model>
+                                            <name>standalone-full.xml</name>
+                                        </config>
+                                    </included-configs>
+                                </feature-pack>
+                            </feature-packs>
+                            <plugin-options>
+                                <jboss-maven-dist/>
+                                <jboss-fork-embedded/>
+                            </plugin-options>
                         </configuration>
                     </execution>
                 </executions>
@@ -105,7 +142,15 @@
                 <version>${version.resources.plugin}</version>
                 <executions combine.self="override">
                     <execution>
-                        <id>ts.copy-jbossas.groups</id>
+                        <id>ts.config-as.copy-mgmt-users</id>
+                        <phase>none</phase>
+                    </execution>
+                    <execution>
+                        <id>ts.copy-wildfly</id>
+                        <phase>none</phase>
+                    </execution>
+                    <execution>
+                        <id>ts.copy-elytron.config</id>
                         <phase>process-test-resources</phase>
                         <inherited>false</inherited>
                         <configuration combine.self="override">
@@ -172,7 +217,7 @@
                     <systemPropertyVariables>
                         <jboss.server.config.file.name>standalone-full.xml</jboss.server.config.file.name>
                         <jboss.inst>${wildfly.dir}</jboss.inst>
-                        <server.jvm.args>-Dmaven.repo.local=${settings.localRepository} -Djboss.bind.address=${node0} -Djboss.bind.address.management=${node0} ${surefire.system.args} ${jvm.args.ip.server} ${jvm.args.other} ${jvm.args.timeouts}</server.jvm.args>
+                        <server.jvm.args>-Dmaven.repo.local=${settings.localRepository} -Djboss.bind.address=${node0} -Djboss.bind.address.management=${node0} ${surefire.system.args} ${jvm.args.ip.server} ${jvm.args.other} ${jvm.args.timeouts} ${extra.server.jvm.args}</server.jvm.args>
                         <node0>${node0}</node0>
 
                         <!-- let's override the module.path parent configuration with dummy value, to avoid the "IllegalStateException: Duplicate layer 'base'" -->
@@ -224,5 +269,5 @@
             </build>
         </profile>
     </profiles>
-  
+
 </project>

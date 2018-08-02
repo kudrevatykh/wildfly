@@ -58,8 +58,10 @@ import org.jboss.ejb.server.Request;
 import org.jboss.ejb.server.SessionOpenRequest;
 import org.jboss.invocation.InterceptorContext;
 import org.jboss.remoting3.Connection;
+import org.wildfly.clustering.Registration;
 import org.wildfly.clustering.group.Group;
 import org.wildfly.clustering.registry.Registry;
+import org.wildfly.clustering.registry.RegistryListener;
 import org.wildfly.common.annotation.NotNull;
 import org.wildfly.security.auth.server.SecurityIdentity;
 
@@ -79,13 +81,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 /**
  * @author <a href="mailto:tadamski@redhat.com">Tomasz Adamski</a>
  */
 final class AssociationImpl implements Association, AutoCloseable {
 
+    private static final String RETURNED_CONTEXT_DATA_KEY = "jboss.returned.keys";
     private final DeploymentRepository deploymentRepository;
     private final ClusterTopologyRegistrar clusterTopologyRegistrar;
     private final Registry<String, List<ClientMapping>> clientMappingRegistry;
@@ -295,6 +297,7 @@ final class AssociationImpl implements Association, AutoCloseable {
             return CancelHandle.NULL;
         }
         final Component component = ejbDeploymentInformation.getEjbComponent();
+        component.waitForComponentStart();
         if (!(component instanceof StatefulSessionComponent)) {
             sessionOpenRequest.writeNotStateful();
             return CancelHandle.NULL;
@@ -310,6 +313,17 @@ final class AssociationImpl implements Association, AutoCloseable {
             final SessionID sessionID;
             try {
                 sessionID = statefulSessionComponent.createSessionRemote();
+            }  catch (EJBComponentUnavailableException ex) {
+                // if the EJB is shutting down when the invocation was done, then it's as good as the EJB not being available. The client has to know about this as
+                // a "no such EJB" failure so that it can retry the invocation on a different node if possible.
+                EjbLogger.EJB3_INVOCATION_LOGGER.debugf("Cannot handle session creation on bean: %s due to EJB component unavailability exception. Returning a no such EJB available message back to client", beanName);
+                sessionOpenRequest.writeNoSuchEJB();
+                return;
+            } catch (ComponentIsStoppedException ex) {
+                EjbLogger.EJB3_INVOCATION_LOGGER.debugf("Cannot handle session creation on bean: %s due to EJB component stopped exception. Returning a no such EJB available message back to client", beanName);
+                sessionOpenRequest.writeNoSuchEJB();
+                return;
+                // TODO should we write a specifc response with a specific protocol letting client know that server is suspending?
             } catch (Exception t) {
                 EjbLogger.REMOTE_LOGGER.exceptionGeneratingSessionId(t, statefulSessionComponent.getComponentName(), ejbIdentifier);
                 sessionOpenRequest.writeException(t);
@@ -342,7 +356,12 @@ final class AssociationImpl implements Association, AutoCloseable {
         final DeploymentRepositoryListener listener = new DeploymentRepositoryListener() {
             @Override
             public void listenerAdded(final DeploymentRepository repository) {
-                moduleAvailabilityListener.moduleAvailable(repository.getModules().keySet().stream().map(AssociationImpl::toModuleIdentifier).collect(Collectors.toList()));
+                List<EJBModuleIdentifier> list = new ArrayList<>();
+                for (DeploymentModuleIdentifier deploymentModuleIdentifier : repository.getModules().keySet()) {
+                    EJBModuleIdentifier ejbModuleIdentifier = toModuleIdentifier(deploymentModuleIdentifier);
+                    list.add(ejbModuleIdentifier);
+                }
+                moduleAvailabilityListener.moduleAvailable(list);
             }
 
             @Override
@@ -390,24 +409,24 @@ final class AssociationImpl implements Association, AutoCloseable {
         return moduleDeployment.getEjbs().get(beanName);
     }
 
-    private class ClusterTopologyRegistrar implements Registry.Listener<String, List<ClientMapping>> {
+    private class ClusterTopologyRegistrar implements RegistryListener<String, List<ClientMapping>> {
         private final Set<ClusterTopologyListener> clusterTopologyListeners = ConcurrentHashMap.newKeySet();
         private final Registry<String, List<ClientMapping>> clientMappingRegistry;
+        private final Registration listenerRegistration;
 
         ClusterTopologyRegistrar(Registry<String, List<ClientMapping>> clientMappingRegistry) {
             this.clientMappingRegistry = clientMappingRegistry;
-            this.clientMappingRegistry.addListener(this);
+            this.listenerRegistration = clientMappingRegistry.register(this);
         }
 
         @Override
         public void addedEntries(Map<String, List<ClientMapping>> added) {
             ClusterTopologyListener.ClusterInfo info = getClusterInfo(added);
-            this.clusterTopologyListeners.forEach(listener -> {
-                // Synchronize each listener to ensure that the initial topology was set before processing new entries
+            for (ClusterTopologyListener listener : this.clusterTopologyListeners) {// Synchronize each listener to ensure that the initial topology was set before processing new entries
                 synchronized (listener) {
                     listener.clusterNewNodesAdded(info);
                 }
-            });
+            }
         }
 
         @Override
@@ -418,25 +437,24 @@ final class AssociationImpl implements Association, AutoCloseable {
         @Override
         public void removedEntries(Map<String, List<ClientMapping>> removed) {
             List<ClusterTopologyListener.ClusterRemovalInfo> removals = Collections.singletonList(new ClusterTopologyListener.ClusterRemovalInfo(this.clientMappingRegistry.getGroup().getName(), new ArrayList<>(removed.keySet())));
-            this.clusterTopologyListeners.forEach(listener -> {
-                // Synchronize each listener to ensure that the initial topology was set before processing removed entries
+            for (ClusterTopologyListener listener : this.clusterTopologyListeners) {// Synchronize each listener to ensure that the initial topology was set before processing removed entries
                 synchronized (listener) {
                     listener.clusterNodesRemoved(removals);
                 }
-            });
+            }
         }
 
         ListenerHandle registerClusterTopologyListener(ClusterTopologyListener listener) {
             // Synchronize on the listener to ensure that the initial topology is set before processing any changes from the registry listener
             synchronized (listener) {
                 this.clusterTopologyListeners.add(listener);
-                listener.clusterTopology(!this.clientMappingRegistry.getGroup().isLocal() ? Collections.singletonList(getClusterInfo(this.clientMappingRegistry.getEntries())) : Collections.emptyList());
+                listener.clusterTopology(!this.clientMappingRegistry.getGroup().isSingleton() ? Collections.singletonList(getClusterInfo(this.clientMappingRegistry.getEntries())) : Collections.emptyList());
             }
             return () -> this.clusterTopologyListeners.remove(listener);
         }
 
         void close() {
-            this.clientMappingRegistry.removeListener(this);
+            this.listenerRegistration.close();
             this.clusterTopologyListeners.clear();
         }
 
@@ -508,15 +526,29 @@ final class AssociationImpl implements Association, AutoCloseable {
         final boolean isAsync = componentView.isAsynchronous(method);
         final boolean oneWay = isAsync && method.getReturnType() == void.class;
         final boolean isSessionBean = componentView.getComponent() instanceof SessionBeanComponent;
-        contextDataHolder.putAll(interceptorContext.getContextData());
         if (isAsync && isSessionBean) {
             if (! oneWay) {
                 interceptorContext.putPrivateData(CancellationFlag.class, cancellationFlag);
             }
             final Object result = invokeWithIdentity(componentView, interceptorContext, securityIdentity);
+            handleReturningContextData(contextDataHolder, interceptorContext, content);
             return result == null ? null : ((Future<?>) result).get();
         } else {
-            return invokeWithIdentity(componentView, interceptorContext, securityIdentity);
+            Object result = invokeWithIdentity(componentView, interceptorContext, securityIdentity);
+            handleReturningContextData(contextDataHolder, interceptorContext, content);
+            return result;
+        }
+    }
+
+    private static void handleReturningContextData(Map<String, Object> contextDataHolder, InterceptorContext interceptorContext, InvocationRequest.Resolved content) {
+        Set<String> returnKeys = (Set<String>) content.getAttachments().get(RETURNED_CONTEXT_DATA_KEY);
+        if(returnKeys == null) {
+            return;
+        }
+        for(String key : returnKeys) {
+            if(interceptorContext.getContextData().containsKey(key)) {
+                contextDataHolder.put(key, interceptorContext.getContextData().get(key));
+            }
         }
     }
 
@@ -560,7 +592,7 @@ final class AssociationImpl implements Association, AutoCloseable {
         Registry<String, List<ClientMapping>> registry = this.clientMappingRegistry;
         Group group = registry != null ? registry.getGroup() : null;
 
-        return group != null && !group.isLocal() ? new ClusterAffinity(group.getName()) : null;
+        return group != null && !group.isSingleton() ? new ClusterAffinity(group.getName()) : null;
     }
 
     Executor getExecutor() {

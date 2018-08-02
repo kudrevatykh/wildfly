@@ -36,18 +36,11 @@ public class AnnotatedEJBComponentDescriptionDeploymentUnitProcessor extends Abs
 
     private final EJBComponentDescriptionFactory[] factories;
 
-    /**
-     * If this is an appclient we want to make the components as not installable, so we can still look up which EJB's are in
-     * the deployment, but do not actually install them
-     */
-    protected final boolean appclient;
-
-    public AnnotatedEJBComponentDescriptionDeploymentUnitProcessor(final boolean appclient) {
+    public AnnotatedEJBComponentDescriptionDeploymentUnitProcessor(final boolean appclient, final boolean defaultMdbPoolAvailable, final boolean defaultSlsbPoolAvailable) {
         super(appclient);
-        this.appclient = appclient;
         this.factories = new EJBComponentDescriptionFactory[] {
-                new MessageDrivenComponentDescriptionFactory(appclient),
-                new SessionBeanComponentDescriptionFactory(appclient)
+                new MessageDrivenComponentDescriptionFactory(appclient, defaultMdbPoolAvailable),
+                new SessionBeanComponentDescriptionFactory(appclient, defaultSlsbPoolAvailable)
         };
     }
 

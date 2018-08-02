@@ -26,12 +26,12 @@ import org.infinispan.AdvancedCache;
 import org.infinispan.Cache;
 import org.jboss.as.clustering.controller.Operation;
 import org.jboss.as.clustering.controller.OperationExecutor;
-import org.jboss.as.clustering.msc.ServiceContainerHelper;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.dmr.ModelNode;
 import org.wildfly.clustering.infinispan.spi.InfinispanCacheRequirement;
+import org.wildfly.clustering.service.PassiveServiceSupplier;
 
 /**
  * Executor for partition handling operations.
@@ -40,15 +40,15 @@ import org.wildfly.clustering.infinispan.spi.InfinispanCacheRequirement;
 public class PartitionHandlingOperationExecutor implements OperationExecutor<AdvancedCache<?, ?>> {
 
     @Override
-    public ModelNode execute(OperationContext context, Operation<AdvancedCache<?, ?>> operation) throws OperationFailedException {
+    public ModelNode execute(OperationContext context, ModelNode operation, Operation<AdvancedCache<?, ?>> executable) throws OperationFailedException {
         PathAddress address = context.getCurrentAddress();
         PathAddress cacheAddress = address.getParent();
 
         String cacheName = cacheAddress.getLastElement().getValue();
         String containerName = cacheAddress.getParent().getLastElement().getValue();
 
-        Cache<?, ?> cache = ServiceContainerHelper.findValue(context.getServiceRegistry(true), InfinispanCacheRequirement.CACHE.getServiceName(context, containerName, cacheName));
+        Cache<?, ?> cache = new PassiveServiceSupplier<Cache<?, ?>>(context.getServiceRegistry(true), InfinispanCacheRequirement.CACHE.getServiceName(context, containerName, cacheName)).get();
 
-        return (cache != null) ? operation.execute(cache.getAdvancedCache()) : null;
+        return (cache != null) ? executable.execute(context, operation, cache.getAdvancedCache()) : null;
     }
 }

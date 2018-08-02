@@ -24,7 +24,10 @@ package org.wildfly.extension.messaging.activemq;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SOCKET_BINDING;
-import static org.wildfly.extension.messaging.activemq.CommonAttributes.JGROUPS_CHANNEL;
+import static org.wildfly.extension.messaging.activemq.DiscoveryGroupDefinition.CAPABILITY;
+import static org.wildfly.extension.messaging.activemq.DiscoveryGroupDefinition.JGROUPS_CHANNEL;
+import static org.wildfly.extension.messaging.activemq.DiscoveryGroupDefinition.JGROUPS_CHANNEL_FACTORY;
+import static org.wildfly.extension.messaging.activemq.CommonAttributes.JGROUPS_CLUSTER;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -37,8 +40,8 @@ import org.jboss.as.controller.AbstractAddStepHandler;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.PathAddress;
-import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
+import org.jboss.as.controller.operations.common.Util;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.network.SocketBinding;
 import org.jboss.dmr.ModelNode;
@@ -47,8 +50,9 @@ import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceRegistry;
 import org.jboss.msc.service.ServiceTarget;
-import org.wildfly.clustering.jgroups.spi.ChannelFactory;
-import org.wildfly.clustering.jgroups.spi.JGroupsDefaultRequirement;
+import org.wildfly.clustering.dispatcher.CommandDispatcherFactory;
+import org.wildfly.clustering.spi.ClusteringDefaultRequirement;
+import org.wildfly.extension.messaging.activemq.broadcast.CommandDispatcherBroadcastEndpointFactory;
 
 /**
  * Handler for adding a discovery group.
@@ -64,17 +68,33 @@ public class DiscoveryGroupAdd extends AbstractAddStepHandler {
     }
 
     @Override
-    protected void recordCapabilitiesAndRequirements(OperationContext context, ModelNode operation, Resource resource) throws OperationFailedException {
-        //super.recordCapabilitiesAndRequirements(context, operation, resource);
-        String discoveryGroupName = context.getCurrentAddressValue();
-        String serverName = context.getCurrentAddress().getParent().getLastElement().getValue();
-        String compositeName = serverName + "." + discoveryGroupName;
+    public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
+        CommonAttributes.renameChannelToCluster(operation);
+        if (operation.hasDefined(JGROUPS_CLUSTER.getName())) {
+            if (operation.hasDefined(JGROUPS_CHANNEL_FACTORY.getName()) && !operation.hasDefined(JGROUPS_CHANNEL.getName())) {
+                // Handle legacy behavior
+                String channel = operation.get(JGROUPS_CLUSTER.getName()).asString();
+                operation.get(JGROUPS_CHANNEL.getName()).set(channel);
 
-        context.registerCapability(DiscoveryGroupDefinition.CHANNEL_FACTORY_CAPABILITY.fromBaseCapability(compositeName));
+                PathAddress channelAddress = context.getCurrentAddress().getParent().getParent().getParent().append(ModelDescriptionConstants.SUBSYSTEM, "jgroups").append("channel", channel);
+                ModelNode addChannelOperation = Util.createAddOperation(channelAddress);
+                addChannelOperation.get("stack").set(operation.get(JGROUPS_CHANNEL_FACTORY.getName()));
+                // Fabricate a channel resource
+                context.addStep(addChannelOperation, AddIfAbsentStepHandler.INSTANCE, OperationContext.Stage.MODEL);
+            }
+        }
+        super.execute(context, operation);
+    }
+
+    @Override
+    protected void recordCapabilitiesAndRequirements(OperationContext context, ModelNode operation, Resource resource) throws OperationFailedException {
+        PathAddress address = context.getCurrentAddress();
+
+        context.registerCapability(CAPABILITY.fromBaseCapability(address));
 
         ModelNode model = resource.getModel();
-        if (CommonAttributes.JGROUPS_CHANNEL.resolveModelAttribute(context, model).isDefined() && !DiscoveryGroupDefinition.JGROUPS_STACK.resolveModelAttribute(context, model).isDefined()) {
-            context.registerAdditionalCapabilityRequirement(JGroupsDefaultRequirement.CHANNEL_FACTORY.getName(), RuntimeCapability.buildDynamicCapabilityName(DiscoveryGroupDefinition.CHANNEL_FACTORY_CAPABILITY.getName(), compositeName), DiscoveryGroupDefinition.JGROUPS_STACK.getName());
+        if (JGROUPS_CLUSTER.resolveModelAttribute(context, model).isDefined() && !JGROUPS_CHANNEL.resolveModelAttribute(context, model).isDefined()) {
+            context.registerAdditionalCapabilityRequirement(ClusteringDefaultRequirement.COMMAND_DISPATCHER_FACTORY.getName(), CAPABILITY.getDynamicName(address), JGROUPS_CHANNEL_FACTORY.getName());
         }
     }
 
@@ -90,7 +110,7 @@ public class DiscoveryGroupAdd extends AbstractAddStepHandler {
             context.reloadRequired();
         } else {
             final ServiceTarget target = context.getServiceTarget();
-            if (model.hasDefined(JGROUPS_CHANNEL.getName())) {
+            if (model.hasDefined(JGROUPS_CLUSTER.getName())) {
                 // nothing to do, in that case, the clustering.jgroups subsystem will have setup the stack
             } else if(model.hasDefined(RemoteTransportDefinition.SOCKET_BINDING.getName())) {
                 final GroupBindingService bindingService = new GroupBindingService();
@@ -148,11 +168,11 @@ public class DiscoveryGroupAdd extends AbstractAddStepHandler {
     }
 
 
-    static DiscoveryGroupConfiguration createDiscoveryGroupConfiguration(final String name, final DiscoveryGroupConfiguration config, final ChannelFactory channelFactory, final String channelName) throws Exception {
+    static DiscoveryGroupConfiguration createDiscoveryGroupConfiguration(final String name, final DiscoveryGroupConfiguration config, final CommandDispatcherFactory commandDispatcherFactory, final String channelName) throws Exception {
         final long refreshTimeout = config.getRefreshTimeout();
         final long initialWaitTimeout = config.getDiscoveryInitialWaitTimeout();
 
-        final BroadcastEndpointFactory endpointFactory = new JGroupsBroadcastEndpointFactory(channelFactory, channelName);
+        final BroadcastEndpointFactory endpointFactory = new CommandDispatcherBroadcastEndpointFactory(commandDispatcherFactory, channelName);
 
         return new DiscoveryGroupConfiguration()
                 .setName(name)

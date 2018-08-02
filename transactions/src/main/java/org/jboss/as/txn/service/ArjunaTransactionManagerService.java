@@ -40,7 +40,6 @@ import org.jboss.tm.JBossXATerminator;
 import org.jboss.tm.TransactionManagerLocator;
 import org.jboss.tm.usertx.UserTransactionRegistry;
 import org.omg.CORBA.ORB;
-import org.wildfly.transaction.client.ContextTransactionSynchronizationRegistry;
 import org.wildfly.transaction.client.LocalUserTransaction;
 
 import java.lang.reflect.Field;
@@ -99,13 +98,11 @@ public final class ArjunaTransactionManagerService implements Service<com.arjuna
 
         if (!jts) {
             // No IIOP, stick with JTA mode.
-            jtaEnvironmentBean.getValue().setTransactionManagerClassName(com.arjuna.ats.jbossatx.jta.TransactionManagerDelegate.class.getName());
-
             final com.arjuna.ats.jbossatx.jta.TransactionManagerService service = new com.arjuna.ats.jbossatx.jta.TransactionManagerService();
             final LocalUserTransaction userTransaction = LocalUserTransaction.getInstance();
             jtaEnvironmentBean.getValue().setUserTransaction(userTransaction);
             service.setJbossXATerminator(xaTerminatorInjector.getValue());
-            service.setTransactionSynchronizationRegistry(new TransactionSynchronizationRegistryWrapper(ContextTransactionSynchronizationRegistry.getInstance()));
+            service.setTransactionSynchronizationRegistry(new TransactionSynchronizationRegistryWrapper());
 
             try {
                 service.create();
@@ -119,13 +116,11 @@ public final class ArjunaTransactionManagerService implements Service<com.arjuna
             new PostInitLoader(PostInitLoader.generateORBPropertyName("com.arjuna.orbportability.orb"), orb);
 
             // IIOP is enabled, so fire up JTS mode.
-            jtaEnvironmentBean.getValue().setTransactionManagerClassName(com.arjuna.ats.jbossatx.jts.TransactionManagerDelegate.class.getName());
-
             final com.arjuna.ats.jbossatx.jts.TransactionManagerService service = new com.arjuna.ats.jbossatx.jts.TransactionManagerService();
             final LocalUserTransaction userTransaction = LocalUserTransaction.getInstance();
             jtaEnvironmentBean.getValue().setUserTransaction(userTransaction);
             service.setJbossXATerminator(xaTerminatorInjector.getValue());
-            service.setTransactionSynchronizationRegistry(new TransactionSynchronizationRegistryWrapper(ContextTransactionSynchronizationRegistry.getInstance()));
+            service.setTransactionSynchronizationRegistry(new TransactionSynchronizationRegistryWrapper());
             service.setPropagateFullContext(true);
 
             // this is not great, but it's the only way presently to influence the behavior of com.arjuna.ats.internal.jbossatx.jts.InboundTransactionCurrentImple

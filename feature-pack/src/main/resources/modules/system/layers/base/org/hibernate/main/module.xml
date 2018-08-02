@@ -22,13 +22,11 @@
   ~ 02110-1301 USA, or see the FSF site: http://www.fsf.org.
   -->
 
-<!-- Represents the Hibernate 5.0.x module-->
-<module xmlns="urn:jboss:module:1.5" name="org.hibernate">
+<!-- Represents Hibernate 5.1.x, will later become 5.3.x for WF 14  -->
+<module xmlns="urn:jboss:module:1.7" name="org.hibernate">
     <resources>
         <artifact name="${org.hibernate:hibernate-core}"/>
-        <artifact name="${org.hibernate:hibernate-envers}"/>
-        <artifact name="${org.hibernate:hibernate-entitymanager}"/>
-        <artifact name="${org.hibernate:hibernate-java8}"/>
+        <artifact name="${org.hibernate:hibernate-envers}"/> 
     </resources>
 
     <dependencies>
@@ -48,7 +46,8 @@
         <module name="org.jboss.logging"/>
         <module name="org.jboss.vfs"/>
         <module name="org.hibernate.commons-annotations"/>
-        <module name="org.hibernate.infinispan" services="import" optional="true"/>
-        <module name="org.hibernate.jipijapa-hibernate5" services="import"/>
+        <module name="org.hibernate.jipijapa-hibernate5-3" services="import"/>
+        <module name="org.infinispan.hibernate-cache" services="import" optional="true"/>
+        <module name="net.bytebuddy"/>
     </dependencies>
 </module>

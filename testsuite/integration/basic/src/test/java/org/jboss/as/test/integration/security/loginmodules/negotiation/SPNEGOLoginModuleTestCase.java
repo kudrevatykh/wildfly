@@ -42,6 +42,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.PropertyPermission;
+
 import javax.security.auth.kerberos.ServicePermission;
 import javax.security.auth.login.LoginException;
 import javax.servlet.http.HttpServletResponse;
@@ -83,8 +84,8 @@ import org.jboss.as.arquillian.container.ManagementClient;
 import org.jboss.as.network.NetworkUtils;
 import org.jboss.as.test.integration.security.common.AbstractSecurityDomainsServerSetupTask;
 import org.jboss.as.test.integration.security.common.AbstractSystemPropertiesServerSetupTask;
+import org.jboss.as.test.integration.security.common.CoreUtils;
 import org.jboss.as.test.integration.security.common.KDCServerAnnotationProcessor;
-import org.jboss.as.test.integration.security.common.SecurityTraceLoggingServerSetupTask;
 import org.jboss.as.test.integration.security.common.Utils;
 import org.jboss.as.test.integration.security.common.config.SecurityDomain;
 import org.jboss.as.test.integration.security.common.config.SecurityModule;
@@ -122,7 +123,8 @@ import org.junit.runner.RunWith;
  * @author Josef Cacek
  */
 @RunWith(Arquillian.class)
-@ServerSetup({SecurityTraceLoggingServerSetupTask.class, Krb5ConfServerSetupTask.class, //
+@ServerSetup({//SecurityTraceLoggingServerSetupTask.class, // Uncomment if TRACE logging is necessary. Don't leave it on all the time; CI resources aren't free.
+        Krb5ConfServerSetupTask.class, //
         SPNEGOLoginModuleTestCase.KerberosSystemPropertiesSetupTask.class, //
         SPNEGOLoginModuleTestCase.KDCServerSetupTask.class, //
         GSSTestServer.class, //
@@ -178,6 +180,7 @@ public class SPNEGOLoginModuleTestCase {
                 new PropertyPermission(GSSTestConstants.PROPERTY_PASSWORD, "read"),
                 // Permissions for GSSTestClient to connect to GSSTestServer
                 new SocketPermission(TestSuiteEnvironment.getServerAddress(), "resolve,connect"),
+                new SocketPermission(CoreUtils.getCannonicalHost(TestSuiteEnvironment.getServerAddress()), "resolve,connect"),
                 // Permissions for GSSTestClient to initiate gss context
                 new ServicePermission(GSSTestConstants.PRINCIPAL, "initiate"),
                 new ServicePermission("krbtgt/JBOSS.ORG@JBOSS.ORG", "initiate")),

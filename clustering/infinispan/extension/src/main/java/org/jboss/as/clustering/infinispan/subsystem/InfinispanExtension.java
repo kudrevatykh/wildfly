@@ -42,19 +42,21 @@ public class InfinispanExtension implements Extension {
 
     public static final String SUBSYSTEM_NAME = "infinispan";
 
-    static final SubsystemResourceDescriptionResolver SUBSYSTEM_RESOLVER = new SubsystemResourceDescriptionResolver(SUBSYSTEM_NAME, InfinispanExtension.class);
+    public static final SubsystemResourceDescriptionResolver SUBSYSTEM_RESOLVER = new SubsystemResourceDescriptionResolver(SUBSYSTEM_NAME, InfinispanExtension.class);
 
     @Override
     public void initialize(ExtensionContext context) {
         SubsystemRegistration registration = context.registerSubsystem(SUBSYSTEM_NAME, InfinispanModel.CURRENT.getVersion());
 
         new InfinispanSubsystemResourceDefinition().register(new ContextualSubsystemRegistration(registration, context));
-        registration.registerXMLElementWriter(() -> new InfinispanSubsystemXMLWriter());
+        registration.registerXMLElementWriter(new InfinispanSubsystemXMLWriter());
     }
 
     @Override
     public void initializeParsers(ExtensionParsingContext context) {
-        EnumSet.allOf(InfinispanSchema.class).forEach(schema -> context.setSubsystemXmlMapping(SUBSYSTEM_NAME, schema.getNamespaceUri(), () -> new InfinispanSubsystemXMLReader(schema)));
+        for (InfinispanSchema schema : EnumSet.allOf(InfinispanSchema.class)) {
+            context.setSubsystemXmlMapping(SUBSYSTEM_NAME, schema.getNamespaceUri(), new InfinispanSubsystemXMLReader(schema));
+        }
         context.setProfileParsingCompletionHandler(new InfinispanProfileParsingCompletionHandler());
     }
 }

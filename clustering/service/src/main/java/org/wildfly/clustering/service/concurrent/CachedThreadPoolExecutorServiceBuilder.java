@@ -21,46 +21,30 @@
  */
 package org.wildfly.clustering.service.concurrent;
 
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
-import java.util.function.Function;
-import java.util.function.Supplier;
 
-import org.jboss.msc.service.Service;
 import org.jboss.msc.service.ServiceBuilder;
-import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceTarget;
-import org.jboss.threads.JBossExecutors;
-import org.wildfly.clustering.service.AsynchronousServiceBuilder;
 import org.wildfly.clustering.service.Builder;
-import org.wildfly.clustering.service.SuppliedValueService;
 
 /**
  * Service that provides an {@link Executor} that uses a cached thread pool.
  * @author Paul Ferraro
+ * @deprecated Replaced by {@link CachedThreadPoolExecutorServiceConfigurator}.
  */
-public class CachedThreadPoolExecutorServiceBuilder implements Builder<ExecutorService> {
-
-    private final ServiceName name;
-    private final ThreadFactory factory;
+@Deprecated
+public class CachedThreadPoolExecutorServiceBuilder extends CachedThreadPoolExecutorServiceConfigurator implements Builder<ExecutorService> {
 
     public CachedThreadPoolExecutorServiceBuilder(ServiceName name, ThreadFactory factory) {
-        this.name = name;
-        this.factory = factory;
+        super(name, factory);
     }
 
-    @Override
-    public ServiceName getServiceName() {
-        return this.name;
-    }
-
+    @SuppressWarnings("unchecked")
     @Override
     public ServiceBuilder<ExecutorService> build(ServiceTarget target) {
-        Function<ExecutorService, ExecutorService> mapper = executor -> JBossExecutors.protectedExecutorService(executor);
-        Supplier<ExecutorService> supplier = () -> Executors.newCachedThreadPool(this.factory);
-        Service<ExecutorService> service = new SuppliedValueService<>(mapper, supplier, ExecutorService::shutdown);
-        return new AsynchronousServiceBuilder<>(this.name, service).startSynchronously().build(target).setInitialMode(ServiceController.Mode.ON_DEMAND);
+        return (ServiceBuilder<ExecutorService>) super.build(target);
     }
 }

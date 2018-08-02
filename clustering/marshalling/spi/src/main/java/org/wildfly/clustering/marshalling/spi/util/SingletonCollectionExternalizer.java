@@ -26,12 +26,8 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
 import java.util.function.Function;
 
-import org.kohsuke.MetaInfServices;
 import org.wildfly.clustering.marshalling.Externalizer;
 
 /**
@@ -41,13 +37,13 @@ public class SingletonCollectionExternalizer<T extends Collection<Object>> imple
 
     private final Function<Object, T> factory;
 
-    SingletonCollectionExternalizer(Function<Object, T> factory) {
+    public SingletonCollectionExternalizer(Function<Object, T> factory) {
         this.factory = factory;
     }
 
     @Override
     public void writeObject(ObjectOutput output, T collection) throws IOException {
-        output.writeObject(collection.stream().findFirst().get());
+        output.writeObject(collection.iterator().next());
     }
 
     @Override
@@ -59,19 +55,5 @@ public class SingletonCollectionExternalizer<T extends Collection<Object>> imple
     @Override
     public Class<T> getTargetClass() {
         return (Class<T>) this.factory.apply(null).getClass();
-    }
-
-    @MetaInfServices(Externalizer.class)
-    public static class SingletonListExternalizer extends SingletonCollectionExternalizer<List<Object>> {
-        public SingletonListExternalizer() {
-            super(Collections::singletonList);
-        }
-    }
-
-    @MetaInfServices(Externalizer.class)
-    public static class SingletonSetExternalizer extends SingletonCollectionExternalizer<Set<Object>> {
-        public SingletonSetExternalizer() {
-            super(Collections::singleton);
-        }
     }
 }

@@ -25,6 +25,8 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.time.Duration;
+import java.time.Instant;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -33,9 +35,10 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.jboss.as.server.CurrentServiceContainer;
-import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceName;
 import org.wildfly.clustering.group.Node;
+import org.wildfly.clustering.service.PassiveServiceSupplier;
+import org.wildfly.clustering.service.ServiceSupplier;
 
 @WebServlet(urlPatterns = { NodeServiceServlet.SERVLET_PATH })
 public class NodeServiceServlet extends HttpServlet {
@@ -45,7 +48,7 @@ public class NodeServiceServlet extends HttpServlet {
     static final String SERVLET_PATH = "/" + SERVLET_NAME;
     private static final String SERVICE = "service";
     private static final String EXPECTED = "expected";
-    private static final int RETRIES = 10;
+    private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     public static URI createURI(URL baseURL, ServiceName serviceName) throws URISyntaxException {
         return baseURL.toURI().resolve(buildQuery(serviceName).toString());
@@ -64,15 +67,15 @@ public class NodeServiceServlet extends HttpServlet {
         String serviceName = getRequiredParameter(req, SERVICE);
         String expected = req.getParameter(EXPECTED);
         this.log(String.format("Received request for %s, expecting %s", serviceName, expected));
-        @SuppressWarnings("unchecked")
-        ServiceController<Node> service = (ServiceController<Node>) CurrentServiceContainer.getServiceContainer().getService(ServiceName.parse(serviceName));
+        ServiceSupplier<Node> localNodeSupplier = new PassiveServiceSupplier<Node>(CurrentServiceContainer.getServiceContainer(), ServiceName.parse(serviceName)).setTimeout(TIMEOUT);
+        Instant stop = Instant.now().plus(TIMEOUT);
         try {
-            Node node = service.awaitValue();
+            Node node = localNodeSupplier.get();
             if (expected != null) {
-                for (int i = 0; i < RETRIES; ++i) {
+                while (Instant.now().isBefore(stop)) {
                     if ((node != null) && expected.equals(node.getName())) break;
                     Thread.yield();
-                    node = service.awaitValue();
+                    node = localNodeSupplier.get();
                 }
             }
             if (node != null) {
@@ -80,8 +83,6 @@ public class NodeServiceServlet extends HttpServlet {
             }
         } catch (IllegalStateException e) {
             // Thrown when quorum was not met
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         }
         resp.getWriter().write("Success");
     }

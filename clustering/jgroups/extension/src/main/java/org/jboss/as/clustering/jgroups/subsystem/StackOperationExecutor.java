@@ -24,15 +24,13 @@ package org.jboss.as.clustering.jgroups.subsystem;
 
 import org.jboss.as.clustering.controller.Operation;
 import org.jboss.as.clustering.controller.OperationExecutor;
-import org.jboss.as.clustering.msc.ServiceContainerHelper;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.dmr.ModelNode;
-import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceName;
-import org.jboss.msc.service.ServiceRegistry;
 import org.wildfly.clustering.jgroups.spi.ChannelFactory;
 import org.wildfly.clustering.jgroups.spi.JGroupsRequirement;
+import org.wildfly.clustering.service.ActiveServiceSupplier;
 
 /**
  * @author Paul Ferraro
@@ -40,22 +38,11 @@ import org.wildfly.clustering.jgroups.spi.JGroupsRequirement;
 public class StackOperationExecutor implements OperationExecutor<ChannelFactory> {
 
     @Override
-    public ModelNode execute(OperationContext context, Operation<ChannelFactory> operation) throws OperationFailedException {
+    public ModelNode execute(OperationContext context, ModelNode operation, Operation<ChannelFactory> executable) throws OperationFailedException {
         String stackName = context.getCurrentAddressValue();
 
-        ServiceRegistry registry = context.getServiceRegistry(false);
         ServiceName serviceName = JGroupsRequirement.CHANNEL_FACTORY.getServiceName(context, stackName);
-        try {
-            ServiceController<ChannelFactory> controller = ServiceContainerHelper.getService(registry, serviceName);
-            ServiceController.Mode mode = controller.getMode();
-            controller.setMode(ServiceController.Mode.ACTIVE);
-            try {
-                return operation.execute(controller.awaitValue());
-            } finally {
-                controller.setMode(mode);
-            }
-        } catch (InterruptedException e) {
-            throw new OperationFailedException(e.getLocalizedMessage(), e);
-        }
+        ChannelFactory factory = new ActiveServiceSupplier<ChannelFactory>(context.getServiceRegistry(true), serviceName).get();
+        return executable.execute(context, operation, factory);
     }
 }

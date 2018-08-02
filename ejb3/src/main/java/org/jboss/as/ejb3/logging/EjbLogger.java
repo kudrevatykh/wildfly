@@ -43,6 +43,7 @@ import javax.ejb.ConcurrentAccessTimeoutException;
 import javax.ejb.EJBAccessException;
 import javax.ejb.EJBException;
 import javax.ejb.EJBTransactionRequiredException;
+import javax.ejb.EJBTransactionRolledbackException;
 import javax.ejb.IllegalLoopbackException;
 import javax.ejb.LockType;
 import javax.ejb.NoMoreTimeoutsException;
@@ -75,8 +76,8 @@ import org.jboss.as.ee.component.ResourceInjectionTarget;
 import org.jboss.as.ejb3.component.EJBComponentDescription;
 import org.jboss.as.ejb3.component.EJBComponentUnavailableException;
 import org.jboss.as.ejb3.component.EJBViewDescription;
+import org.jboss.as.ejb3.component.singleton.SingletonComponent;
 import org.jboss.as.ejb3.component.stateful.StatefulSessionComponentInstance;
-import org.jboss.as.ejb3.concurrency.LockableComponent;
 import org.jboss.as.ejb3.subsystem.EJB3SubsystemModel;
 import org.jboss.as.ejb3.subsystem.deployment.EJBComponentType;
 import org.jboss.as.ejb3.subsystem.deployment.InstalledComponent;
@@ -100,8 +101,10 @@ import org.jboss.logging.annotations.LogMessage;
 import org.jboss.logging.annotations.Message;
 import org.jboss.logging.annotations.MessageLogger;
 import org.jboss.logging.annotations.Param;
+import org.jboss.logging.annotations.Signature;
 import org.jboss.metadata.ejb.spec.MethodParametersMetaData;
 import org.jboss.msc.service.ServiceController;
+import org.jboss.msc.service.ServiceName;
 
 /**
  * @author <a href="mailto:Flemming.Harms@gmail.com">Flemming Harms</a>
@@ -552,7 +555,7 @@ public interface EjbLogger extends BasicLogger {
 
     @LogMessage(level = ERROR)
     @Message(id = 64, value = "Failed to set transaction for rollback only")
-    void failedToSetRollbackOnly(@Cause Exception e);
+    void failedToSetRollbackOnly(@Cause Throwable e);
 
     @Message(id = 65, value = "View interface cannot be null")
     IllegalArgumentException viewInterfaceCannotBeNull();
@@ -859,10 +862,10 @@ public interface EjbLogger extends BasicLogger {
 //    @LogMessage(level = ERROR)
 //    @Message(id = 155, value = "Error during transaction management of transaction id %s")
 //    void errorDuringTransactionManagement(@Cause Throwable cause, XidTransactionID id);
-
-    @LogMessage(level = WARN)
-    @Message(id = 156, value = "%s retrying %d")
-    void retrying(String message, int count);
+//
+//    @LogMessage(level = WARN)
+//    @Message(id = 156, value = "%s retrying %d")
+//    void retrying(String message, int count);
 
     @LogMessage(level = ERROR)
     @Message(id = 157, value = "Failed to get status")
@@ -1531,7 +1534,7 @@ public interface EjbLogger extends BasicLogger {
      * @return a {@link IllegalStateException} for the error.
      */
     @Message(id = 242, value = "Illegal lock type %s on %s for component %s")
-    IllegalStateException failToObtainLockIllegalType(LockType lockType, Method method, LockableComponent lockableComponent);
+    IllegalStateException failToObtainLockIllegalType(LockType lockType, Method method, SingletonComponent lockableComponent);
 
     /**
      * Creates an exception indicating the inability to call the method as something is missing for the invocation.
@@ -1702,8 +1705,8 @@ public interface EjbLogger extends BasicLogger {
      *
      * @return a {@link RuntimeException} for the error.
      */
-    @Message(id = 263, value = "Could not load EJB view class ")
-    RuntimeException failToLoadEjbViewClass(@Cause Throwable e);
+//    @Message(id = 263, value = "Could not load EJB view class ")
+//    RuntimeException failToLoadEjbViewClass(@Cause Throwable e);
 
 
     /**
@@ -2930,7 +2933,8 @@ public interface EjbLogger extends BasicLogger {
     DeploymentUnitProcessingException ejbBusinessMethodMustBePublic(final Method method);
 
     @Message(id = 442, value = "Unexpected Error")
-    EJBException unexpectedError();
+    @Signature(String.class)
+    EJBException unexpectedError(@Cause Throwable cause);
 
     @Message(id = 443, value = "EJB 3.1 FR 13.3.3: BMT bean %s should complete transaction before returning.")
     String transactionNotComplete(String componentName);
@@ -2983,7 +2987,8 @@ public interface EjbLogger extends BasicLogger {
     void failedToRefreshTimers(String timedObjectId);
 
     @Message(id = 457, value = "Unexpected Error")
-    String convertUnexpectedError();
+    @Signature(String.class)
+    EJBTransactionRolledbackException unexpectedErrorRolledBack(@Cause Error error);
 
     //@LogMessage(level = ERROR)
     //@Message(id = 458, value = "Failure in caller transaction.")
@@ -3132,4 +3137,34 @@ public interface EjbLogger extends BasicLogger {
     @LogMessage(level = WARN)
     @Message(id = 497, value = "Failed to persist timer %s on startup. This is likely due to another cluster member making the same change, and should not affect operation.")
     void failedToPersistTimerOnStartup(TimerImpl activeTimer, @Cause  Exception e);
+
+    @Message(id = 499, value = "Cannot read derived size - service %s unreachable")
+    OperationFailedException cannotReadStrictMaxPoolDerivedSize(ServiceName serviceName);
+
+    @LogMessage(level = ERROR)
+    @Message(id = 500, value = "Legacy org.jboss.security.annotation.SecurityDomain annotation is used in class: %s, please use org.jboss.ejb3.annotation.SecurityDomain instead.")
+    void legacySecurityDomainAnnotationIsUsed(String cls);
+
+    @Message(id = 501, value = "Failed to activate MDB %s")
+    RuntimeException failedToActivateMdb(String componentName, @Cause Exception e);
+
+    @LogMessage(level = ERROR)
+    @Message(id = 502, value = "Exception checking if timer %s should run")
+    void exceptionCheckingIfTimerShouldRun(Timer timer, @Cause Exception e);
+
+    @LogMessage(level = WARN)
+    @Message(id = 503, value = "[EJB3.2 spec, section 5.6.4] Message Driven Bean 'onMessage' method can not be final (MDB: %s).")
+    void mdbOnMessageMethodCantBeFinal(String className);
+
+    @LogMessage(level = WARN)
+    @Message(id = 504, value = "[EJB3.2 spec, section 5.6.4] Message Driven Bean 'onMessage' method can not be private (MDB: %s).")
+    void mdbOnMessageMethodCantBePrivate(String className);
+
+    @LogMessage(level = WARN)
+    @Message(id = 505, value = "[EJB3.2 spec, section 5.6.4] Message Driven Bean 'onMessage' method can not be static (MDB: %s).")
+    void mdbOnMessageMethodCantBeStatic(String className);
+
+    @LogMessage(level = WARN)
+    @Message(id = 506, value = "[EJB3.2 spec, section 5.6.2] Message Driven Bean can not have a 'finalize' method. (MDB: %s)")
+    void mdbCantHaveFinalizeMethod(String className);
 }

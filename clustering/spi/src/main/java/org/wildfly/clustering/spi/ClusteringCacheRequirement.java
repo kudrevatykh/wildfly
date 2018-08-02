@@ -35,12 +35,13 @@ import org.wildfly.clustering.singleton.SingletonCacheRequirement;
  */
 public enum ClusteringCacheRequirement implements DefaultableBinaryRequirement, DefaultableBinaryServiceNameFactoryProvider {
     GROUP("org.wildfly.clustering.cache.group", ClusteringDefaultCacheRequirement.GROUP),
-    NODE_FACTORY("org.wildfly.clustering.cache.node-factory", ClusteringDefaultCacheRequirement.NODE_FACTORY),
+    @Deprecated NODE_FACTORY("org.wildfly.clustering.cache.node-factory", ClusteringDefaultCacheRequirement.NODE_FACTORY),
     REGISTRY("org.wildfly.clustering.cache.registry", ClusteringDefaultCacheRequirement.REGISTRY),
     REGISTRY_ENTRY("org.wildfly.clustering.cache.registry-entry", ClusteringDefaultCacheRequirement.REGISTRY_ENTRY),
     REGISTRY_FACTORY("org.wildfly.clustering.cache.registry-factory", ClusteringDefaultCacheRequirement.REGISTRY_FACTORY),
     SERVICE_PROVIDER_REGISTRY("org.wildfly.clustering.cache.service-provider-registry", ClusteringDefaultCacheRequirement.SERVICE_PROVIDER_REGISTRY),
-    SINGLETON_SERVICE_BUILDER_FACTORY(SingletonCacheRequirement.SINGLETON_SERVICE_BUILDER_FACTORY, ClusteringDefaultCacheRequirement.SINGLETON_SERVICE_BUILDER_FACTORY),
+    @Deprecated SINGLETON_SERVICE_BUILDER_FACTORY(SingletonCacheRequirement.SINGLETON_SERVICE_BUILDER_FACTORY, ClusteringDefaultCacheRequirement.SINGLETON_SERVICE_BUILDER_FACTORY),
+    SINGLETON_SERVICE_CONFIGURATOR_FACTORY(SingletonCacheRequirement.SINGLETON_SERVICE_CONFIGURATOR_FACTORY, ClusteringDefaultCacheRequirement.SINGLETON_SERVICE_CONFIGURATOR_FACTORY),
     ;
     private final String name;
     private final BinaryServiceNameFactory factory = new BinaryRequirementServiceNameFactory(this);

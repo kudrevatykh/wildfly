@@ -24,16 +24,10 @@ package org.wildfly.extension.mod_cluster;
 
 import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.PathAddress;
-import org.jboss.as.controller.capability.registry.RuntimeCapabilityRegistry;
-import org.jboss.as.controller.extension.ExtensionRegistry;
-import org.jboss.as.controller.registry.ManagementResourceRegistration;
-import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.model.test.FailedOperationTransformationConfig;
 import org.jboss.as.model.test.ModelTestControllerVersion;
 import org.jboss.as.model.test.ModelTestUtils;
 import org.jboss.as.subsystem.test.AbstractSubsystemTest;
-import org.jboss.as.subsystem.test.AdditionalInitialization;
-import org.jboss.as.subsystem.test.ControllerInitializer;
 import org.jboss.as.subsystem.test.KernelServices;
 import org.jboss.as.subsystem.test.KernelServicesBuilder;
 import org.jboss.dmr.ModelNode;
@@ -63,51 +57,47 @@ public class ModClusterTransformersTestCase extends AbstractSubsystemTest {
 
     private static ModClusterModel getModelVersion(ModelTestControllerVersion controllerVersion) {
         switch (controllerVersion) {
-            case EAP_6_2_0:
-                return ModClusterModel.VERSION_1_4_0;
-            case EAP_6_3_0:
             case EAP_6_4_0:
             case EAP_6_4_7:
                 return ModClusterModel.VERSION_1_5_0;
             case EAP_7_0_0:
                 return ModClusterModel.VERSION_4_0_0;
+            case EAP_7_1_0:
+                return ModClusterModel.VERSION_5_0_0;
         }
         throw new IllegalArgumentException();
     }
 
     private static String[] getDependencies(ModelTestControllerVersion version) {
         switch (version) {
-            case EAP_6_2_0:
-                return new String[] {formatEAP6SubsystemArtifact(version), "org.jboss.mod_cluster:mod_cluster-core:1.2.6.Final-redhat-1"};
-            case EAP_6_3_0:
-                return new String[] {formatEAP6SubsystemArtifact(version), "org.jboss.mod_cluster:mod_cluster-core:1.2.9.Final-redhat-1"};
             case EAP_6_4_0:
             case EAP_6_4_7:
                 return new String[] {formatEAP6SubsystemArtifact(version), "org.jboss.mod_cluster:mod_cluster-core:1.2.11.Final-redhat-1"};
             case EAP_7_0_0:
                 return new String[] {formatEAP7SubsystemArtifact(version), "org.jboss.mod_cluster:mod_cluster-core:1.3.2.Final-redhat-1"};
+            case EAP_7_1_0:
+                return new String[] {
+                        formatEAP7SubsystemArtifact(version),
+                        "org.jboss.mod_cluster:mod_cluster-core:1.3.7.Final-redhat-1",
+                        formatArtifact("org.jboss.eap:wildfly-clustering-common:%s", version),
+                };
         }
         throw new IllegalArgumentException();
     }
 
     @Test
-    public void testTransformerEAP_6_2_0() throws Exception {
-        testTransformation(ModelTestControllerVersion.EAP_6_2_0);
-    }
-
-    @Test
-    public void testTransformerEAP_6_3_0() throws Exception {
-        testTransformation(ModelTestControllerVersion.EAP_6_3_0);
-    }
-
-    @Test
     public void testTransformerEAP_6_4_0() throws Exception {
-        testTransformation(ModelTestControllerVersion.EAP_6_4_0);
+        this.testTransformation(ModelTestControllerVersion.EAP_6_4_0);
     }
 
     @Test
     public void testTransformerEAP_7_0_0() throws Exception {
-        testTransformation(ModelTestControllerVersion.EAP_7_0_0);
+        this.testTransformation(ModelTestControllerVersion.EAP_7_0_0);
+    }
+
+    @Test
+    public void testTransformerEAP_7_1_0() throws Exception {
+        this.testTransformation(ModelTestControllerVersion.EAP_7_1_0);
     }
 
     private void testTransformation(ModelTestControllerVersion controllerVersion) throws Exception {
@@ -117,12 +107,13 @@ public class ModClusterTransformersTestCase extends AbstractSubsystemTest {
         ModelVersion modelVersion = model.getVersion();
         String extensionClassName = (model.getVersion().getMajor() == 1) ? "org.jboss.as.modcluster.ModClusterExtension" : "org.wildfly.extension.mod_cluster.ModClusterExtension";
 
-        KernelServicesBuilder builder = createKernelServicesBuilder(createAdditionalInitialization())
+        KernelServicesBuilder builder = createKernelServicesBuilder(new ModClusterAdditionalInitialization())
                 .setSubsystemXml(subsystemXml);
         builder.createLegacyKernelServicesBuilder(null, controllerVersion, modelVersion)
                 .addMavenResourceURL(dependencies)
                 .setExtensionClassName(extensionClassName)
-                .skipReverseControllerCheck();
+                .skipReverseControllerCheck()
+                .dontPersistXml();
 
         KernelServices mainServices = builder.build();
         KernelServices legacyServices = mainServices.getLegacyServices(modelVersion);
@@ -135,23 +126,18 @@ public class ModClusterTransformersTestCase extends AbstractSubsystemTest {
     }
 
     @Test
-    public void testRejectionsEAP_6_2_0() throws Exception {
-        testRejections(ModelTestControllerVersion.EAP_6_2_0);
-    }
-
-    @Test
-    public void testRejectionsEAP_6_3_0() throws Exception {
-        testRejections(ModelTestControllerVersion.EAP_6_3_0);
-    }
-
-    @Test
     public void testRejectionsEAP_6_4_0() throws Exception {
-        testRejections(ModelTestControllerVersion.EAP_6_4_0);
+        this.testRejections(ModelTestControllerVersion.EAP_6_4_0);
     }
 
     @Test
     public void testRejectionsEAP_7_0_0() throws Exception {
-        testRejections(ModelTestControllerVersion.EAP_7_0_0);
+        this.testRejections(ModelTestControllerVersion.EAP_7_0_0);
+    }
+
+    @Test
+    public void testRejectionsEAP_7_1_0() throws Exception {
+        this.testRejections(ModelTestControllerVersion.EAP_7_1_0);
     }
 
     private void testRejections(ModelTestControllerVersion controllerVersion) throws Exception {
@@ -161,10 +147,12 @@ public class ModClusterTransformersTestCase extends AbstractSubsystemTest {
         ModelVersion modelVersion = model.getVersion();
         String extensionClassName = (model.getVersion().getMajor() == 1) ? "org.jboss.as.modcluster.ModClusterExtension" : "org.wildfly.extension.mod_cluster.ModClusterExtension";
 
-        KernelServicesBuilder builder = createKernelServicesBuilder(createAdditionalInitialization());
-        builder.createLegacyKernelServicesBuilder(null, controllerVersion, modelVersion)
+        KernelServicesBuilder builder = createKernelServicesBuilder(new ModClusterAdditionalInitialization());
+        builder.createLegacyKernelServicesBuilder(model.getVersion().getMajor() >= 4 ? new ModClusterAdditionalInitialization() : null, controllerVersion, modelVersion)
+                .addSingleChildFirstClass(ModClusterAdditionalInitialization.class)
                 .addMavenResourceURL(dependencies)
-                .setExtensionClassName(extensionClassName);
+                .setExtensionClassName(extensionClassName)
+                .skipReverseControllerCheck();
 
         KernelServices mainServices = builder.build();
         KernelServices legacyServices = mainServices.getLegacyServices(modelVersion);
@@ -176,61 +164,29 @@ public class ModClusterTransformersTestCase extends AbstractSubsystemTest {
         ModelTestUtils.checkFailedTransformedBootOperations(mainServices, modelVersion, parse(subsystemXml), createFailedOperationConfig(modelVersion));
     }
 
-    /**
-     * Changed attributes:
-     *
-     * - proxies configuration
-     * - status-interval is rejected if set to value other than 10
-     * - session-draining-strategy configuration
-     */
     private static FailedOperationTransformationConfig createFailedOperationConfig(ModelVersion version) {
         FailedOperationTransformationConfig config = new FailedOperationTransformationConfig();
 
         PathAddress subsystemAddress = PathAddress.pathAddress(ModClusterSubsystemResourceDefinition.PATH);
-        PathAddress configurationAddress = subsystemAddress.append(ModClusterConfigResourceDefinition.PATH);
+        PathAddress configurationAddress = subsystemAddress.append(ProxyConfigurationResourceDefinition.pathElement("default"));
+
+//        if (ModClusterModel.VERSION_6_0_0.requiresTransformation(version)) {
+//            config.addFailedAttribute(subsystemAddress.append(ProxyConfigurationResourceDefinition.pathElement("other")), FailedOperationTransformationConfig.REJECTED_RESOURCE);
+//        }
 
         if (ModClusterModel.VERSION_3_0_0.requiresTransformation(version)) {
-            config.addFailedAttribute(configurationAddress, FailedOperationTransformationConfig.ChainedConfig.createBuilder(CommonAttributes.STATUS_INTERVAL, CommonAttributes.PROXIES)
-                    .addConfig(new StatusIntervalConfig(CommonAttributes.STATUS_INTERVAL))
-                    .addConfig(new ProxiesConfig(CommonAttributes.PROXIES))
-                    .build());
-        }
-
-        if (ModClusterModel.VERSION_1_5_0.requiresTransformation(version)) {
-            config.addFailedAttribute(configurationAddress, FailedOperationTransformationConfig.ChainedConfig.createBuilder(CommonAttributes.STATUS_INTERVAL, CommonAttributes.PROXIES, CommonAttributes.SESSION_DRAINING_STRATEGY)
-                    .addConfig(new StatusIntervalConfig(CommonAttributes.STATUS_INTERVAL))
-                    .addConfig(new ProxiesConfig(CommonAttributes.PROXIES))
-                    .addConfig(new SessionDrainingStrategyConfig(CommonAttributes.SESSION_DRAINING_STRATEGY))
+            config.addFailedAttribute(configurationAddress, FailedOperationTransformationConfig.ChainedConfig.createBuilder(ProxyConfigurationResourceDefinition.Attribute.STATUS_INTERVAL.getName(), ProxyConfigurationResourceDefinition.Attribute.PROXIES.getName())
+                    .addConfig(new StatusIntervalConfig())
+                    .addConfig(new ProxiesConfig())
                     .build());
         }
 
         return config;
     }
 
-    private static class SessionDrainingStrategyConfig extends FailedOperationTransformationConfig.AttributesPathAddressConfig<SessionDrainingStrategyConfig> {
-        public SessionDrainingStrategyConfig(String... attributes) {
-            super(attributes);
-        }
-
-        @Override
-        protected boolean isAttributeWritable(String attributeName) {
-            return true;
-        }
-
-        @Override
-        protected boolean checkValue(String attrName, ModelNode attribute, boolean isWriteAttribute) {
-            return !(attribute.equals(new ModelNode()) || attribute.equals(new ModelNode("DEFAULT")));
-        }
-
-        @Override
-        protected ModelNode correctValue(ModelNode toResolve, boolean isWriteAttribute) {
-            return new ModelNode("DEFAULT");
-        }
-    }
-
-    private static class ProxiesConfig extends FailedOperationTransformationConfig.AttributesPathAddressConfig<ProxiesConfig> {
-        public ProxiesConfig(String... attributes) {
-            super(attributes);
+    static class ProxiesConfig extends FailedOperationTransformationConfig.AttributesPathAddressConfig<ProxiesConfig> {
+        ProxiesConfig() {
+            super(ProxyConfigurationResourceDefinition.Attribute.PROXIES.getName());
         }
 
         @Override
@@ -249,9 +205,9 @@ public class ModClusterTransformersTestCase extends AbstractSubsystemTest {
         }
     }
 
-    private static class StatusIntervalConfig extends FailedOperationTransformationConfig.AttributesPathAddressConfig<StatusIntervalConfig> {
-        public StatusIntervalConfig(String... attributes) {
-            super(attributes);
+    static class StatusIntervalConfig extends FailedOperationTransformationConfig.AttributesPathAddressConfig<StatusIntervalConfig> {
+        StatusIntervalConfig() {
+            super(ProxyConfigurationResourceDefinition.Attribute.STATUS_INTERVAL.getName());
         }
 
         @Override
@@ -268,25 +224,5 @@ public class ModClusterTransformersTestCase extends AbstractSubsystemTest {
         protected ModelNode correctValue(ModelNode toResolve, boolean isWriteAttribute) {
             return new ModelNode(10);
         }
-    }
-
-    protected AdditionalInitialization createAdditionalInitialization() {
-        return new AdditionalInitialization.ManagementAdditionalInitialization() {
-
-            @Override
-            protected void initializeExtraSubystemsAndModel(ExtensionRegistry extensionRegistry, Resource rootResource, ManagementResourceRegistration rootRegistration, RuntimeCapabilityRegistry capabilityRegistry) {
-                registerCapabilities(capabilityRegistry, "org.wildfly.undertow.listener.ajp");
-            }
-
-            @Override
-            protected void setupController(ControllerInitializer controllerInitializer) {
-                super.setupController(controllerInitializer);
-
-                controllerInitializer.addSocketBinding("modcluster", 0); // "224.0.1.105", "23364"
-                controllerInitializer.addRemoteOutboundSocketBinding("proxy1", "localhost", 6666);
-                controllerInitializer.addRemoteOutboundSocketBinding("proxy2", "localhost", 6766);
-                controllerInitializer.addRemoteOutboundSocketBinding("proxy3", "localhost", 6866);
-            }
-        };
     }
 }

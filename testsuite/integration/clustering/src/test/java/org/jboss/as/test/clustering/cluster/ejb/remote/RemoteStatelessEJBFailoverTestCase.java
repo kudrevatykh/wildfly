@@ -22,49 +22,34 @@
 
 package org.jboss.as.test.clustering.cluster.ejb.remote;
 
-import java.util.PropertyPermission;
 import java.util.function.UnaryOperator;
 
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.container.test.api.TargetsContainer;
-import org.jboss.as.test.clustering.cluster.ejb.remote.bean.Incrementor;
-import org.jboss.as.test.clustering.cluster.ejb.remote.bean.IncrementorBean;
-import org.jboss.as.test.clustering.cluster.ejb.remote.bean.Result;
 import org.jboss.as.test.clustering.cluster.ejb.remote.bean.StatelessIncrementorBean;
-import org.jboss.as.test.clustering.ejb.EJBDirectory;
-import org.jboss.as.test.shared.integration.ejb.security.PermissionUtils;
+import org.jboss.as.test.clustering.ejb.RemoteEJBDirectory;
 import org.jboss.shrinkwrap.api.Archive;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 
 /**
  * Validates failover behavior of a remotely accessed @Stateless EJB.
  * @author Paul Ferraro
  */
 public class RemoteStatelessEJBFailoverTestCase extends AbstractRemoteStatelessEJBFailoverTestCase {
-    private static final String MODULE_NAME = "remote-stateless-ejb-failover-test";
+    private static final String MODULE_NAME = RemoteStatelessEJBFailoverTestCase.class.getSimpleName();
 
     @Deployment(name = DEPLOYMENT_1, managed = false, testable = false)
-    @TargetsContainer(CONTAINER_1)
+    @TargetsContainer(NODE_1)
     public static Archive<?> createDeploymentForContainer1() {
-        return createDeployment();
+        return createDeployment(MODULE_NAME);
     }
 
     @Deployment(name = DEPLOYMENT_2, managed = false, testable = false)
-    @TargetsContainer(CONTAINER_2)
+    @TargetsContainer(NODE_2)
     public static Archive<?> createDeploymentForContainer2() {
-        return createDeployment();
-    }
-
-    private static Archive<?> createDeployment() {
-        return ShrinkWrap.create(JavaArchive.class, MODULE_NAME + ".jar")
-                .addPackage(EJBDirectory.class.getPackage())
-                .addClasses(Result.class, Incrementor.class, IncrementorBean.class, StatelessIncrementorBean.class)
-                .addAsManifestResource(PermissionUtils.createPermissionsXmlAsset(new PropertyPermission(NODE_NAME_PROPERTY, "read")), "permissions.xml")
-                ;
+        return createDeployment(MODULE_NAME);
     }
 
     public RemoteStatelessEJBFailoverTestCase() {
-        super(MODULE_NAME, StatelessIncrementorBean.class, UnaryOperator.identity());
+        super(() -> new RemoteEJBDirectory(MODULE_NAME), StatelessIncrementorBean.class, UnaryOperator.identity());
     }
 }

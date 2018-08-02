@@ -35,15 +35,15 @@ import org.apache.http.client.utils.HttpClientUtils;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.container.test.api.OperateOnDeployment;
-import org.jboss.arquillian.container.test.api.RunAsClient;
 import org.jboss.arquillian.container.test.api.TargetsContainer;
 import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.arquillian.test.api.ArquillianResource;
 import org.jboss.as.server.security.ServerPermission;
-import org.jboss.as.test.clustering.cluster.ClusterAbstractTestCase;
+import org.jboss.as.test.clustering.cluster.AbstractClusteringTestCase;
 import org.jboss.as.test.clustering.cluster.singleton.service.ValueServiceActivator;
 import org.jboss.as.test.clustering.cluster.singleton.service.ValueServiceServlet;
 import org.jboss.as.test.http.util.TestHttpClientUtils;
+import org.jboss.as.test.shared.IntermittentFailure;
 import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.StringAsset;
@@ -53,23 +53,24 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 @RunWith(Arquillian.class)
-@RunAsClient
-public class SingletonBackupServiceTestCase extends ClusterAbstractTestCase {
+public class SingletonBackupServiceTestCase extends AbstractClusteringTestCase {
+
+    private static final String MODULE_NAME = SingletonBackupServiceTestCase.class.getSimpleName();
 
     @Deployment(name = DEPLOYMENT_1, managed = false, testable = false)
-    @TargetsContainer(CONTAINER_1)
-    public static Archive<?> deployment0() {
-        return createDeployment();
-    }
-
-    @Deployment(name = DEPLOYMENT_2, managed = false, testable = false)
-    @TargetsContainer(CONTAINER_2)
+    @TargetsContainer(NODE_1)
     public static Archive<?> deployment1() {
         return createDeployment();
     }
 
+    @Deployment(name = DEPLOYMENT_2, managed = false, testable = false)
+    @TargetsContainer(NODE_2)
+    public static Archive<?> deployment2() {
+        return createDeployment();
+    }
+
     private static Archive<?> createDeployment() {
-        WebArchive war = ShrinkWrap.create(WebArchive.class, "singleton.war");
+        WebArchive war = ShrinkWrap.create(WebArchive.class, MODULE_NAME + ".war");
         war.addPackage(ValueServiceServlet.class.getPackage());
         war.setManifest(new StringAsset("Manifest-Version: 1.0\nDependencies: org.jboss.as.server\n"));
         war.addAsServiceProvider(org.jboss.msc.service.ServiceActivator.class, ValueServiceActivator.class);
@@ -87,8 +88,10 @@ public class SingletonBackupServiceTestCase extends ClusterAbstractTestCase {
             @ArquillianResource(ValueServiceServlet.class) @OperateOnDeployment(DEPLOYMENT_2) URL baseURL2)
             throws IOException, URISyntaxException {
 
+        IntermittentFailure.thisTestIsFailingIntermittently("WFLY-10233");
+
         // Needed to be able to inject ArquillianResource
-        stop(CONTAINER_2);
+        stop(NODE_2);
 
         try (CloseableHttpClient client = TestHttpClientUtils.promiscuousCookieHttpClient()) {
             HttpResponse response = client.execute(new HttpGet(ValueServiceServlet.createURI(baseURL1, ValueServiceActivator.SERVICE_NAME)));
@@ -99,7 +102,7 @@ public class SingletonBackupServiceTestCase extends ClusterAbstractTestCase {
                 HttpClientUtils.closeQuietly(response);
             }
 
-            start(CONTAINER_2);
+            start(NODE_2);
 
             response = client.execute(new HttpGet(ValueServiceServlet.createURI(baseURL1, ValueServiceActivator.SERVICE_NAME)));
             try {
@@ -117,7 +120,7 @@ public class SingletonBackupServiceTestCase extends ClusterAbstractTestCase {
                 HttpClientUtils.closeQuietly(response);
             }
 
-            stop(CONTAINER_2);
+            stop(NODE_2);
 
             response = client.execute(new HttpGet(ValueServiceServlet.createURI(baseURL1, ValueServiceActivator.SERVICE_NAME)));
             try {
@@ -127,7 +130,7 @@ public class SingletonBackupServiceTestCase extends ClusterAbstractTestCase {
                 HttpClientUtils.closeQuietly(response);
             }
 
-            start(CONTAINER_2);
+            start(NODE_2);
 
             response = client.execute(new HttpGet(ValueServiceServlet.createURI(baseURL1, ValueServiceActivator.SERVICE_NAME)));
             try {
@@ -145,7 +148,7 @@ public class SingletonBackupServiceTestCase extends ClusterAbstractTestCase {
                 HttpClientUtils.closeQuietly(response);
             }
 
-            stop(CONTAINER_1);
+            stop(NODE_1);
 
             response = client.execute(new HttpGet(ValueServiceServlet.createURI(baseURL2, ValueServiceActivator.SERVICE_NAME)));
             try {
@@ -155,7 +158,7 @@ public class SingletonBackupServiceTestCase extends ClusterAbstractTestCase {
                 HttpClientUtils.closeQuietly(response);
             }
 
-            start(CONTAINER_1);
+            start(NODE_1);
 
             response = client.execute(new HttpGet(ValueServiceServlet.createURI(baseURL1, ValueServiceActivator.SERVICE_NAME)));
             try {

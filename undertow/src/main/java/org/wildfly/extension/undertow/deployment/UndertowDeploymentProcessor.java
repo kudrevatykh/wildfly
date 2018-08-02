@@ -23,6 +23,7 @@
 package org.wildfly.extension.undertow.deployment;
 
 import java.net.MalformedURLException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,7 +34,6 @@ import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
-import java.util.stream.Stream;
 
 import javax.security.jacc.PolicyConfiguration;
 
@@ -46,8 +46,8 @@ import org.apache.jasper.deploy.TagLibraryInfo;
 import org.apache.jasper.deploy.TagLibraryValidatorInfo;
 import org.apache.jasper.deploy.TagVariableInfo;
 import org.jboss.annotation.javaee.Icon;
-import org.jboss.as.clustering.controller.CapabilityServiceBuilder;
-import org.jboss.as.clustering.controller.SimpleCapabilityServiceBuilder;
+import org.jboss.as.clustering.controller.CapabilityServiceConfigurator;
+import org.jboss.as.clustering.controller.SimpleCapabilityServiceConfigurator;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.capability.CapabilityServiceSupport;
 import org.jboss.as.ee.component.ComponentRegistry;
@@ -75,7 +75,6 @@ import org.jboss.as.web.common.ServletContextAttribute;
 import org.jboss.as.web.common.WarMetaData;
 import org.jboss.as.web.common.WebComponentDescription;
 import org.jboss.as.web.common.WebInjectionContainer;
-import org.jboss.as.web.host.ContextActivator;
 import org.jboss.as.web.session.SessionIdentifierCodec;
 import org.jboss.dmr.ModelNode;
 import org.jboss.metadata.ear.jboss.JBossAppMetaData;
@@ -86,6 +85,7 @@ import org.jboss.metadata.web.jboss.JBossServletMetaData;
 import org.jboss.metadata.web.jboss.JBossWebMetaData;
 import org.jboss.metadata.web.spec.AttributeMetaData;
 import org.jboss.metadata.web.spec.FunctionMetaData;
+import org.jboss.metadata.web.spec.ListenerMetaData;
 import org.jboss.metadata.web.spec.TagFileMetaData;
 import org.jboss.metadata.web.spec.TagMetaData;
 import org.jboss.metadata.web.spec.TldMetaData;
@@ -112,12 +112,12 @@ import org.wildfly.extension.undertow.UndertowExtension;
 import org.wildfly.extension.undertow.UndertowService;
 import org.wildfly.extension.undertow.logging.UndertowLogger;
 import org.wildfly.extension.undertow.security.jacc.WarJACCDeployer;
-import org.wildfly.extension.undertow.session.DistributableSessionIdentifierCodecBuilderProvider;
+import org.wildfly.extension.undertow.session.DistributableSessionIdentifierCodecServiceConfiguratorProvider;
 import org.wildfly.extension.undertow.session.DistributableSessionManagerConfiguration;
-import org.wildfly.extension.undertow.session.DistributableSessionManagerFactoryBuilderProvider;
+import org.wildfly.extension.undertow.session.DistributableSessionManagerFactoryServiceConfiguratorProvider;
 import org.wildfly.extension.undertow.session.SharedSessionManagerConfig;
 import org.wildfly.extension.undertow.session.SimpleDistributableSessionManagerConfiguration;
-import org.wildfly.extension.undertow.session.SimpleSessionIdentifierCodecBuilder;
+import org.wildfly.extension.undertow.session.SimpleSessionIdentifierCodecServiceConfigurator;
 
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.SessionManagerFactory;
@@ -261,21 +261,14 @@ public class UndertowDeploymentProcessor implements DeploymentUnitProcessor {
 
         boolean securityEnabled = deploymentUnit.hasAttachment(SecurityAttachments.SECURITY_ENABLED);
 
-        String metaDataSecurityDomain = metaData.getSecurityDomain();
-        if (metaDataSecurityDomain == null) {
-            metaDataSecurityDomain = getJBossAppSecurityDomain(deploymentUnit);
+        String tempSecurityDomain = metaData.getSecurityDomain();
+        if (tempSecurityDomain == null) {
+            tempSecurityDomain = getJBossAppSecurityDomain(deploymentUnit);
         }
-        if (metaDataSecurityDomain != null) {
-            metaDataSecurityDomain = metaDataSecurityDomain.trim();
-        }
+        tempSecurityDomain = tempSecurityDomain == null ? defaultSecurityDomain : SecurityUtil.unprefixSecurityDomain(tempSecurityDomain);
+        boolean known = tempSecurityDomain != null && knownSecurityDomain.test(tempSecurityDomain);
 
-        final String securityDomain;
-        if(securityEnabled) {
-            securityDomain = metaDataSecurityDomain == null ? defaultSecurityDomain : SecurityUtil
-                    .unprefixSecurityDomain(metaDataSecurityDomain);
-        } else {
-            securityDomain = null;
-        }
+        final String securityDomain = (securityEnabled || known) ? tempSecurityDomain : null;
 
         final Set<ServiceName> additionalDependencies = new HashSet<>();
         for (final SetupAction setupAction : setupActions) {
@@ -306,7 +299,10 @@ public class UndertowDeploymentProcessor implements DeploymentUnitProcessor {
         }
 
         final ServiceName hostServiceName = UndertowService.virtualHostName(serverInstanceName, hostName);
-        final ServiceName deploymentServiceName = UndertowService.deploymentServiceName(serverInstanceName, hostName, pathName);
+        final ServiceName legacyDeploymentServiceName = UndertowService.deploymentServiceName(serverInstanceName, hostName, pathName);
+        final ServiceName deploymentServiceName = UndertowService.deploymentServiceName(deploymentUnit.getServiceName());
+
+
         TldsMetaData tldsMetaData = deploymentUnit.getAttachment(TldsMetaData.ATTACHMENT_KEY);
         UndertowDeploymentInfoService undertowDeploymentInfoService = UndertowDeploymentInfoService.builder()
                 .setAttributes(deploymentUnit.getAttachmentList(ServletContextAttribute.ATTACHMENT_KEY))
@@ -337,7 +333,9 @@ public class UndertowDeploymentProcessor implements DeploymentUnitProcessor {
                 .createUndertowDeploymentInfoService();
 
         final ServiceName deploymentInfoServiceName = deploymentServiceName.append(UndertowDeploymentInfoService.SERVICE_NAME);
+        final ServiceName legacyDeploymentInfoServiceName = legacyDeploymentServiceName.append(UndertowDeploymentInfoService.SERVICE_NAME);
         ServiceBuilder<DeploymentInfo> infoBuilder = serviceTarget.addService(deploymentInfoServiceName, undertowDeploymentInfoService)
+                .addAliases(legacyDeploymentInfoServiceName)
                 .addDependency(UndertowService.SERVLET_CONTAINER.append(servletContainerName), ServletContainerService.class, undertowDeploymentInfoService.getContainer())
                 .addDependency(UndertowService.UNDERTOW, UndertowService.class, undertowDeploymentInfoService.getUndertowService())
                 .addDependency(hostServiceName, Host.class, undertowDeploymentInfoService.getHost())
@@ -345,7 +343,7 @@ public class UndertowDeploymentProcessor implements DeploymentUnitProcessor {
                 .addDependency(SuspendController.SERVICE_NAME, SuspendController.class, undertowDeploymentInfoService.getSuspendControllerInjectedValue())
                 .addDependencies(additionalDependencies);
         if(securityDomain != null) {
-            if (knownSecurityDomain.test(securityDomain)) {
+            if (known) {
                 infoBuilder.addDependency(
                         deploymentUnit.getAttachment(Attachments.CAPABILITY_SERVICE_SUPPORT)
                                 .getCapabilityServiceName(
@@ -396,21 +394,22 @@ public class UndertowDeploymentProcessor implements DeploymentUnitProcessor {
         } else {
             CapabilityServiceSupport support = deploymentUnit.getAttachment(Attachments.CAPABILITY_SERVICE_SUPPORT);
 
-            CapabilityServiceBuilder<SessionManagerFactory> factoryBuilder = getSessionManagerFactoryBuilder(deploymentServiceName, serverInstanceName, deploymentName, module, metaData, deploymentUnit.getAttachment(UndertowAttachments.SERVLET_CONTAINER_SERVICE));
-            infoBuilder.addDependency(factoryBuilder.getServiceName(), SessionManagerFactory.class, undertowDeploymentInfoService.getSessionManagerFactoryInjector());
+            CapabilityServiceConfigurator factoryConfigurator = getSessionManagerFactoryServiceConfigurator(deploymentServiceName, serverInstanceName, deploymentName, module, metaData, deploymentUnit.getAttachment(UndertowAttachments.SERVLET_CONTAINER_SERVICE));
+            infoBuilder.addDependency(factoryConfigurator.getServiceName(), SessionManagerFactory.class, undertowDeploymentInfoService.getSessionManagerFactoryInjector());
 
-            CapabilityServiceBuilder<SessionIdentifierCodec> codecBuilder = getSessionIdentifierCodecBuilder(deploymentServiceName, serverInstanceName, deploymentName, metaData);
-            infoBuilder.addDependency(codecBuilder.getServiceName(), SessionIdentifierCodec.class, undertowDeploymentInfoService.getSessionIdentifierCodecInjector());
+            CapabilityServiceConfigurator codecConfigurator = getSessionIdentifierCodecServiceConfigurator(deploymentServiceName, serverInstanceName, deploymentName, metaData);
+            infoBuilder.addDependency(codecConfigurator.getServiceName(), SessionIdentifierCodec.class, undertowDeploymentInfoService.getSessionIdentifierCodecInjector());
 
-            Stream.of(factoryBuilder, codecBuilder).forEach(builder -> builder.configure(support).build(serviceTarget).setInitialMode(Mode.ON_DEMAND).install());
+            for (CapabilityServiceConfigurator configurator : Arrays.asList(factoryConfigurator, codecConfigurator)) {
+                configurator.configure(support).build(serviceTarget).install();
+            }
         }
 
         infoBuilder.install();
 
-        final boolean isWebappBundle = deploymentUnit.hasAttachment(Attachments.OSGI_MANIFEST);
-
-        final UndertowDeploymentService service = new UndertowDeploymentService(injectionContainer, !isWebappBundle);
+        final UndertowDeploymentService service = new UndertowDeploymentService(injectionContainer, true);
         final ServiceBuilder<UndertowDeploymentService> builder = serviceTarget.addService(deploymentServiceName, service)
+                .addAliases(legacyDeploymentServiceName)
                 .addDependencies(dependentComponents)
                 .addDependency(UndertowService.SERVLET_CONTAINER.append(defaultContainer), ServletContainerService.class, service.getContainer())
                 .addDependency(hostServiceName, Host.class, service.getHost())
@@ -419,6 +418,7 @@ public class UndertowDeploymentProcessor implements DeploymentUnitProcessor {
         // inject the server executor which can be used by the WebDeploymentService for blocking tasks in start/stop
         // of that service
         Services.addServerExecutorDependency(builder, service.getServerExecutorInjector());
+        builder.install();
 
         deploymentUnit.addToAttachmentList(Attachments.DEPLOYMENT_COMPLETE_SERVICES, deploymentServiceName);
 
@@ -442,16 +442,6 @@ public class UndertowDeploymentProcessor implements DeploymentUnitProcessor {
             }
         }
 
-
-        // OSGi web applications are activated in {@link WebContextActivationProcessor} according to bundle lifecycle changes
-        if (isWebappBundle) {
-            UndertowDeploymentService.ContextActivatorImpl activator = new UndertowDeploymentService.ContextActivatorImpl(builder.install());
-            deploymentUnit.putAttachment(ContextActivator.ATTACHMENT_KEY, activator);
-            deploymentUnit.addToAttachmentList(Attachments.BUNDLE_ACTIVE_DEPENDENCIES, deploymentServiceName);
-        } else {
-            builder.install();
-        }
-
         // Process the web related mgmt information
         final DeploymentResourceSupport deploymentResourceSupport = deploymentUnit.getAttachment(Attachments.DEPLOYMENT_RESOURCE_SUPPORT);
         final ModelNode node = deploymentResourceSupport.getDeploymentSubsystemModel(UndertowExtension.SUBSYSTEM_NAME);
@@ -461,7 +451,7 @@ public class UndertowDeploymentProcessor implements DeploymentUnitProcessor {
         processManagement(deploymentUnit, metaData);
     }
 
-    private static CapabilityServiceBuilder<SessionManagerFactory> getSessionManagerFactoryBuilder(ServiceName deploymentServiceName, String serverName, String deploymentName, Module module, JBossWebMetaData metaData, ServletContainerService servletContainerService) {
+    private static CapabilityServiceConfigurator getSessionManagerFactoryServiceConfigurator(ServiceName deploymentServiceName, String serverName, String deploymentName, Module module, JBossWebMetaData metaData, ServletContainerService servletContainerService) {
 
         Integer maxActiveSessions = metaData.getMaxActiveSessions();
         if(maxActiveSessions == null && servletContainerService != null) {
@@ -469,25 +459,25 @@ public class UndertowDeploymentProcessor implements DeploymentUnitProcessor {
         }
         ServiceName name = deploymentServiceName.append("session");
         if (metaData.getDistributable() != null) {
-            if (DistributableSessionManagerFactoryBuilderProvider.INSTANCE.isPresent()) {
+            if (DistributableSessionManagerFactoryServiceConfiguratorProvider.INSTANCE.isPresent()) {
                 DistributableSessionManagerConfiguration config = new SimpleDistributableSessionManagerConfiguration(maxActiveSessions, metaData.getReplicationConfig(), serverName, deploymentName, module);
-                return DistributableSessionManagerFactoryBuilderProvider.INSTANCE.get().getBuilder(name, config);
+                return DistributableSessionManagerFactoryServiceConfiguratorProvider.INSTANCE.get().getServiceConfigurator(name, config);
             }
             // Fallback to local session manager if server does not support clustering
             UndertowLogger.ROOT_LOGGER.clusteringNotSupported();
         }
-        return new SimpleCapabilityServiceBuilder<>(name, (maxActiveSessions != null) ? new InMemorySessionManagerFactory(maxActiveSessions) : new InMemorySessionManagerFactory());
+        return new SimpleCapabilityServiceConfigurator<>(name, (maxActiveSessions != null) ? new InMemorySessionManagerFactory(maxActiveSessions) : new InMemorySessionManagerFactory());
     }
 
-    private static CapabilityServiceBuilder<SessionIdentifierCodec> getSessionIdentifierCodecBuilder(ServiceName deploymentServiceName, String serverName, String deploymentName, JBossWebMetaData metaData) {
+    private static CapabilityServiceConfigurator getSessionIdentifierCodecServiceConfigurator(ServiceName deploymentServiceName, String serverName, String deploymentName, JBossWebMetaData metaData) {
         ServiceName name = deploymentServiceName.append("codec");
         if (metaData.getDistributable() != null) {
-            if (DistributableSessionIdentifierCodecBuilderProvider.INSTANCE.isPresent()) {
-                return DistributableSessionIdentifierCodecBuilderProvider.INSTANCE.get().getDeploymentBuilder(name, serverName, deploymentName);
+            if (DistributableSessionIdentifierCodecServiceConfiguratorProvider.INSTANCE.isPresent()) {
+                return DistributableSessionIdentifierCodecServiceConfiguratorProvider.INSTANCE.get().getDeploymentServiceConfigurator(name, serverName, deploymentName);
             }
             // Fallback to simple codec if server does not support clustering
         }
-        return new SimpleSessionIdentifierCodecBuilder(name, serverName);
+        return new SimpleSessionIdentifierCodecServiceConfigurator(name, serverName);
     }
 
     static String pathNameOfDeployment(final DeploymentUnit deploymentUnit, final JBossWebMetaData metaData) {
@@ -538,7 +528,7 @@ public class UndertowDeploymentProcessor implements DeploymentUnitProcessor {
                 securityDomain = ((JBossAppMetaData) jbossAppMetaData).getSecurityDomain();
             }
         }
-        return securityDomain;
+        return securityDomain != null ? securityDomain.trim() : null;
     }
 
     @Override
@@ -593,6 +583,11 @@ public class UndertowDeploymentProcessor implements DeploymentUnitProcessor {
         }
 
         TagLibraryInfo tagLibraryInfo = new TagLibraryInfo();
+        if(tldMetaData.getListeners() != null) {
+            for (ListenerMetaData l : tldMetaData.getListeners()) {
+                tagLibraryInfo.addListener(l.getListenerClass());
+            }
+        }
         tagLibraryInfo.setTlibversion(tldMetaData.getTlibVersion());
         if (tldMetaData.getJspVersion() == null) {
             tagLibraryInfo.setJspversion(tldMetaData.getVersion());

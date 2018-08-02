@@ -25,12 +25,9 @@ import static org.jboss.as.clustering.controller.PropertiesTestUtil.checkMapMode
 import static org.jboss.as.clustering.controller.PropertiesTestUtil.checkMapResults;
 import static org.jboss.as.clustering.controller.PropertiesTestUtil.executeOpInBothControllersWithAttachments;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.COMPOSITE;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.NAME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.STEPS;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.WRITE_ATTRIBUTE_OPERATION;
-import static org.junit.Assert.assertFalse;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -39,8 +36,8 @@ import java.util.List;
 
 import org.jboss.as.clustering.controller.CommonRequirement;
 import org.jboss.as.clustering.controller.CommonUnaryRequirement;
-import org.jboss.as.clustering.controller.Operations;
 import org.jboss.as.clustering.jgroups.subsystem.JGroupsSubsystemInitialization;
+import org.jboss.as.clustering.subsystem.RejectedValueConfig;
 import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
@@ -93,15 +90,13 @@ public class InfinispanTransformersTestCase extends OperationTestCaseBase {
 
     private static InfinispanModel getModelVersion(ModelTestControllerVersion controllerVersion) {
         switch (controllerVersion) {
-            case EAP_6_2_0:
-                return InfinispanModel.VERSION_1_4_1;
-            case EAP_6_3_0:
-                return InfinispanModel.VERSION_1_5_0;
             case EAP_6_4_0:
             case EAP_6_4_7:
                 return InfinispanModel.VERSION_1_6_0;
             case EAP_7_0_0:
                 return InfinispanModel.VERSION_4_0_0;
+            case EAP_7_1_0:
+                return InfinispanModel.VERSION_5_0_0;
             default:
                 throw new IllegalArgumentException();
         }
@@ -109,18 +104,6 @@ public class InfinispanTransformersTestCase extends OperationTestCaseBase {
 
     private static String[] getDependencies(ModelTestControllerVersion version) {
         switch (version) {
-            case EAP_6_2_0:
-                return new String[] {
-                        formatEAP6SubsystemArtifact(version),
-                        "org.infinispan:infinispan-core:5.2.7.Final-redhat-2",
-                        "org.infinispan:infinispan-cachestore-jdbc:5.2.7.Final-redhat-2",
-                };
-            case EAP_6_3_0:
-                return new String[] {
-                        formatEAP6SubsystemArtifact(version),
-                        "org.infinispan:infinispan-core:5.2.10.Final-redhat-1",
-                        "org.infinispan:infinispan-cachestore-jdbc:5.2.10.Final-redhat-1",
-                };
             case EAP_6_4_0:
             case EAP_6_4_7:
                 return new String[] {
@@ -142,6 +125,21 @@ public class InfinispanTransformersTestCase extends OperationTestCaseBase {
                         formatArtifact("org.jboss.eap:wildfly-clustering-infinispan-spi:%s", version),
                         formatArtifact("org.jboss.eap:wildfly-clustering-spi:%s", version),
                 };
+            case EAP_7_1_0:
+                return new String[] {
+                        formatEAP7SubsystemArtifact(version),
+                        "org.infinispan:infinispan-core:8.2.8.Final-redhat-1",
+                        "org.infinispan:infinispan-cachestore-jdbc:8.2.8.Final-redhat-1",
+                        formatArtifact("org.jboss.eap:wildfly-clustering-common:%s", version),
+                        formatArtifact("org.jboss.eap:wildfly-clustering-service:%s", version),
+                        formatArtifact("org.jboss.eap:wildfly-clustering-jgroups-spi:%s", version),
+                        // Following are needed for InfinispanSubsystemInitialization
+                        formatArtifact("org.jboss.eap:wildfly-clustering-jgroups-extension:%s", version),
+                        formatArtifact("org.jboss.eap:wildfly-connector:%s", version),
+                        formatArtifact("org.jboss.eap:wildfly-clustering-infinispan-spi:%s", version),
+                        formatArtifact("org.jboss.eap:wildfly-clustering-singleton-api:%s", version),
+                        formatArtifact("org.jboss.eap:wildfly-clustering-spi:%s", version),
+                };
             default:
                 throw new IllegalArgumentException();
         }
@@ -160,16 +158,6 @@ public class InfinispanTransformersTestCase extends OperationTestCaseBase {
     }
 
     @Test
-    public void testTransformerEAP620() throws Exception {
-        testTransformation(ModelTestControllerVersion.EAP_6_2_0);
-    }
-
-    @Test
-    public void testTransformerEAP630() throws Exception {
-        testTransformation(ModelTestControllerVersion.EAP_6_3_0);
-    }
-
-    @Test
     public void testTransformerEAP640() throws Exception {
         testTransformation(ModelTestControllerVersion.EAP_6_4_0);
     }
@@ -179,6 +167,11 @@ public class InfinispanTransformersTestCase extends OperationTestCaseBase {
         testTransformation(ModelTestControllerVersion.EAP_7_0_0);
     }
 
+    @Test
+    public void testTransformerEAP710() throws Exception {
+        testTransformation(ModelTestControllerVersion.EAP_7_1_0);
+    }
+
     private KernelServices buildKernelServices(ModelTestControllerVersion controllerVersion, ModelVersion version, String... mavenResourceURLs) throws Exception {
         return this.buildKernelServices(this.getSubsystemXml(), controllerVersion, version, mavenResourceURLs);
     }
@@ -186,8 +179,11 @@ public class InfinispanTransformersTestCase extends OperationTestCaseBase {
     private KernelServices buildKernelServices(String xml, ModelTestControllerVersion controllerVersion, ModelVersion version, String... mavenResourceURLs) throws Exception {
         KernelServicesBuilder builder = this.createKernelServicesBuilder().setSubsystemXml(xml);
 
-        builder.createLegacyKernelServicesBuilder(AdditionalInitialization.MANAGEMENT, controllerVersion, version)
+        builder.createLegacyKernelServicesBuilder(createAdditionalInitialization(), controllerVersion, version)
                 .addMavenResourceURL(mavenResourceURLs)
+                .addSingleChildFirstClass(InfinispanSubsystemInitialization.class)
+                .addSingleChildFirstClass(JGroupsSubsystemInitialization.class)
+                .addSingleChildFirstClass(org.jboss.as.clustering.subsystem.AdditionalInitialization.class)
                 .skipReverseControllerCheck()
                 .dontPersistXml();
 
@@ -225,26 +221,23 @@ public class InfinispanTransformersTestCase extends OperationTestCaseBase {
     }
 
     private static ModelFixer createModelFixer(ModelVersion version) {
-        return (ModelNode model) -> {
-            if (InfinispanModel.VERSION_4_1_0.requiresTransformation(version)) {
-                final ModelNode maximal = model.get("cache-container", "maximal");
-                maximal.asPropertyList().stream().filter(caches -> caches.getName().equals("distributed-cache") || caches.getName().equals("replicated-cache")).forEach(p -> {
-                    ModelNode caches = maximal.get(p.getName());
-                    final List<Property> cachesModel = caches.asPropertyList();
-                    for (Property cacheName : cachesModel) {
-                        final ModelNode cache = caches.get(cacheName.getName());
-                        if (cache.hasDefined("component")) {
-                            cache.get("component", "backups").set(new ModelNode());
-                        }
+        return model -> {
+            final ModelNode maximal = model.get("cache-container", "maximal");
+            maximal.asPropertyList().stream().filter(caches -> caches.getName().equals("distributed-cache") || caches.getName().equals("replicated-cache")).forEach(p -> {
+                ModelNode caches = maximal.get(p.getName());
+                final List<Property> cachesModel = caches.asPropertyList();
+                for (Property cacheName : cachesModel) {
+                    final ModelNode cache = caches.get(cacheName.getName());
+                    if (cache.hasDefined("component")) {
+                        cache.get("component", "backups").set(new ModelNode());
                     }
-                });
-            }
-
+                }
+            });
             if (InfinispanModel.VERSION_4_0_0.requiresTransformation(version)) {
                 // Fix the legacy model to expect new default values applied in StateTransferResourceDefinition#buildTransformation
                 Arrays.asList("cache-with-string-keyed-store", "cache-with-binary-keyed-store").forEach(cacheName -> {
                     ModelNode cache = model.get("cache-container", "maximal", "replicated-cache", cacheName);
-                    assertFalse(cache.hasDefined(StateTransferResourceDefinition.LEGACY_PATH.getKeyValuePair()));
+                    Assert.assertFalse(cache.hasDefined(StateTransferResourceDefinition.LEGACY_PATH.getKeyValuePair()));
                     ModelNode stateTransfer = cache.get(StateTransferResourceDefinition.LEGACY_PATH.getKeyValuePair());
                     stateTransfer.get(StateTransferResourceDefinition.Attribute.CHUNK_SIZE.getDefinition().getName()).set(StateTransferResourceDefinition.Attribute.CHUNK_SIZE.getDefinition().getDefaultValue());
                     stateTransfer.get(StateTransferResourceDefinition.Attribute.TIMEOUT.getDefinition().getName()).set(StateTransferResourceDefinition.Attribute.TIMEOUT.getDefinition().getDefaultValue());
@@ -367,16 +360,6 @@ public class InfinispanTransformersTestCase extends OperationTestCaseBase {
     }
 
     @Test
-    public void testRejectionsEAP620() throws Exception {
-        testRejections(ModelTestControllerVersion.EAP_6_2_0);
-    }
-
-    @Test
-    public void testRejectionsEAP630() throws Exception {
-        testRejections(ModelTestControllerVersion.EAP_6_3_0);
-    }
-
-    @Test
     public void testRejectionsEAP640() throws Exception {
         testRejections(ModelTestControllerVersion.EAP_6_4_0);
     }
@@ -384,6 +367,11 @@ public class InfinispanTransformersTestCase extends OperationTestCaseBase {
     @Test
     public void testRejectionsEAP700() throws Exception {
         testRejections(ModelTestControllerVersion.EAP_7_0_0);
+    }
+
+    @Test
+    public void testRejectionsEAP710() throws Exception {
+        testRejections(ModelTestControllerVersion.EAP_7_1_0);
     }
 
     private void testRejections(final ModelTestControllerVersion controller) throws Exception {
@@ -415,66 +403,37 @@ public class InfinispanTransformersTestCase extends OperationTestCaseBase {
         ModelTestUtils.checkFailedTransformedBootOperations(services, version, xmlOps, createFailedOperationConfig(version));
     }
 
+    @SuppressWarnings("deprecation")
     private static FailedOperationTransformationConfig createFailedOperationConfig(ModelVersion version) {
 
         FailedOperationTransformationConfig config = new FailedOperationTransformationConfig();
         PathAddress subsystemAddress = PathAddress.pathAddress(InfinispanSubsystemResourceDefinition.PATH);
         PathAddress containerAddress = subsystemAddress.append(CacheContainerResourceDefinition.WILDCARD_PATH);
 
+        if (InfinispanModel.VERSION_7_0_0.requiresTransformation(version)) {
+            config.addFailedAttribute(containerAddress.append(ReplicatedCacheResourceDefinition.WILDCARD_PATH, StateTransferResourceDefinition.PATH), new RejectedValueConfig(StateTransferResourceDefinition.Attribute.TIMEOUT, value -> value.asLong() <= 0));
+
+            PathAddress cacheAddress = containerAddress.append(ScatteredCacheResourceDefinition.WILDCARD_PATH);
+            config.addFailedAttribute(cacheAddress, FailedOperationTransformationConfig.REJECTED_RESOURCE);
+            for (PathElement path : Arrays.asList(LockingResourceDefinition.PATH, TransactionResourceDefinition.PATH, ObjectMemoryResourceDefinition.PATH, ExpirationResourceDefinition.PATH, StateTransferResourceDefinition.PATH, PartitionHandlingResourceDefinition.PATH)) {
+                config.addFailedAttribute(cacheAddress.append(path), FailedOperationTransformationConfig.REJECTED_RESOURCE);
+            }
+        }
+
+        if (InfinispanModel.VERSION_6_0_0.requiresTransformation(version)) {
+            config.addFailedAttribute(containerAddress.append(ReplicatedCacheResourceDefinition.WILDCARD_PATH, BinaryMemoryResourceDefinition.PATH), FailedOperationTransformationConfig.REJECTED_RESOURCE);
+            config.addFailedAttribute(containerAddress.append(DistributedCacheResourceDefinition.WILDCARD_PATH, OffHeapMemoryResourceDefinition.PATH), FailedOperationTransformationConfig.REJECTED_RESOURCE);
+        }
+
         if (InfinispanModel.VERSION_2_0_0.requiresTransformation(version)) {
             for (PathElement path : Arrays.asList(DistributedCacheResourceDefinition.WILDCARD_PATH, ReplicatedCacheResourceDefinition.WILDCARD_PATH)) {
                 PathAddress cacheAddress = containerAddress.append(path);
-                config.addFailedAttribute(
-                        cacheAddress.append(BackupsResourceDefinition.PATH).append(BackupResourceDefinition.WILDCARD_PATH), FailedOperationTransformationConfig.REJECTED_RESOURCE);
-                config.addFailedAttribute(
-                        cacheAddress.append(BackupForResourceDefinition.PATH), FailedOperationTransformationConfig.REJECTED_RESOURCE);
+                config.addFailedAttribute(cacheAddress.append(BackupsResourceDefinition.PATH), FailedOperationTransformationConfig.REJECTED_RESOURCE);
+                config.addFailedAttribute(cacheAddress.append(BackupsResourceDefinition.PATH, BackupResourceDefinition.WILDCARD_PATH), FailedOperationTransformationConfig.REJECTED_RESOURCE);
+                config.addFailedAttribute(cacheAddress.append(BackupForResourceDefinition.PATH), FailedOperationTransformationConfig.REJECTED_RESOURCE);
             }
-        }
-
-        if (InfinispanModel.VERSION_1_5_0.requiresTransformation(version)) {
-            config.addFailedAttribute(
-                    containerAddress, new ChangeToTrueConfig(CacheContainerResourceDefinition.Attribute.STATISTICS_ENABLED.getName()));
-            config.addFailedAttribute(
-                    containerAddress.append(LocalCacheResourceDefinition.WILDCARD_PATH), new ChangeToTrueConfig(CacheResourceDefinition.Attribute.STATISTICS_ENABLED.getName()));
-            config.addFailedAttribute(
-                    containerAddress.append(DistributedCacheResourceDefinition.WILDCARD_PATH), new ChangeToTrueConfig(CacheResourceDefinition.Attribute.STATISTICS_ENABLED.getName()));
-            config.addFailedAttribute(
-                    containerAddress.append(ReplicatedCacheResourceDefinition.WILDCARD_PATH), new ChangeToTrueConfig(CacheResourceDefinition.Attribute.STATISTICS_ENABLED.getName()));
-            config.addFailedAttribute(
-                    containerAddress.append(InvalidationCacheResourceDefinition.WILDCARD_PATH), new ChangeToTrueConfig(CacheResourceDefinition.Attribute.STATISTICS_ENABLED.getName()));
-
         }
 
         return config;
-    }
-
-    private static class ChangeToTrueConfig extends FailedOperationTransformationConfig.AttributesPathAddressConfig<ChangeToTrueConfig> {
-        ChangeToTrueConfig(String... attributes) {
-            super(attributes);
-        }
-
-        @Override
-        protected boolean isAttributeWritable(String attributeName) {
-            return true;
-        }
-
-        @Override
-        protected boolean checkValue(ModelNode operation, String attrName, ModelNode attribute, boolean isGeneratedWriteAttribute) {
-            if (!isGeneratedWriteAttribute && Operations.getName(operation).equals(WRITE_ATTRIBUTE_OPERATION) && operation.hasDefined(NAME) && operation.get(NAME).asString().equals(CacheContainerResourceDefinition.Attribute.DEFAULT_CACHE.getName())) {
-                // The attribute won't be defined in the :write-attribute(name=default-cache,.. boot operation so don't reject in that case
-                return false;
-            }
-            return !attribute.equals(new ModelNode(true));
-        }
-
-        @Override
-        protected boolean checkValue(String attrName, ModelNode attribute, boolean isWriteAttribute) {
-            throw new IllegalStateException();
-        }
-
-        @Override
-        protected ModelNode correctValue(ModelNode toResolve, boolean isWriteAttribute) {
-            return new ModelNode(true);
-        }
     }
 }

@@ -284,12 +284,16 @@ public class CalendarBasedTimeout {
             // no change in time
             return nextCal;
         }
+
+        // Set the time before adding the a day. If we do it after,
+        // we could be using an invalid DST value in setTime method
+        setTime(nextCal, nextHour, nextMinute, nextSecond);
+
         // time change
         if (nextTimeInSeconds < currentTimeInSeconds) {
             // advance to next day
             nextCal.add(Calendar.DATE, 1);
         }
-        setTime(nextCal, nextHour, nextMinute, nextSecond);
 
         return nextCal;
     }
@@ -580,12 +584,18 @@ public class CalendarBasedTimeout {
     }
 
     private void setTime(Calendar calendar, int hour, int minute, int second) {
+        int dst = calendar.get(Calendar.DST_OFFSET);
         calendar.clear(Calendar.HOUR_OF_DAY);
         calendar.set(Calendar.HOUR_OF_DAY, hour);
         calendar.clear(Calendar.MINUTE);
         calendar.set(Calendar.MINUTE, minute);
         calendar.clear(Calendar.SECOND);
         calendar.set(Calendar.SECOND, second);
+        // restore summertime offset WFLY-9537
+        // this is to avoid to have the standard time (winter) set by GregorianCalendar
+        // after clear and set the time explicit
+        // see comment for computeTime() -> http://grepcode.com/file/repository.grepcode.com/java/root/jdk/openjdk/8-b132/java/util/GregorianCalendar.java#2776
+        calendar.set(Calendar.DST_OFFSET, dst);
     }
 
 }

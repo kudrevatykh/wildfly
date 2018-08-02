@@ -26,7 +26,6 @@ package org.jboss.as.test.integration.jca.poolattributes;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ADD;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REMOVE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
 import static org.jboss.as.test.shared.integration.ejb.security.PermissionUtils.createPermissionsXmlAsset;
 
@@ -150,17 +149,13 @@ public class DatasourcePoolAttributesTestCase extends JcaMgmtBase {
 
         // check initial values
         Assert.assertNotNull(poolConfiguration);
-        Assert.assertEquals(0, poolConfiguration.getMinSize());
-        Assert.assertEquals(20, poolConfiguration.getMaxSize());
         Assert.assertEquals(0, poolConfiguration.getInitialSize());
         Assert.assertEquals(30000, poolConfiguration.getBlockingTimeout());
         Assert.assertEquals(true, poolConfiguration.isFair());
         Assert.assertEquals(false, poolConfiguration.isStrictMin());
 
         // modify values
-        writeAttribute(DS_ADDRESS, Constants.MIN_POOL_SIZE.getName(), "4");
-        writeAttribute(DS_ADDRESS, Constants.MAX_POOL_SIZE.getName(), "10");
-        writeAttribute(DS_ADDRESS, Constants.INITIAL_POOL_SIZE.getName(), "6");
+        writeAttribute(DS_ADDRESS, Constants.INITIAL_POOL_SIZE.getName(), "4");
         writeAttribute(DS_ADDRESS, Constants.BLOCKING_TIMEOUT_WAIT_MILLIS.getName(), "10000");
         writeAttribute(DS_ADDRESS, Constants.POOL_FAIR.getName(), "false");
         writeAttribute(DS_ADDRESS, Constants.POOL_USE_STRICT_MIN.getName(), "true");
@@ -168,11 +163,8 @@ public class DatasourcePoolAttributesTestCase extends JcaMgmtBase {
         // check that server is not in reload-required state
         ModelNode serverState = readAttribute(new ModelNode(), "server-state");
         Assert.assertEquals("running", serverState.asString());
-
         // check that runtime was updated
-        Assert.assertEquals(4, poolConfiguration.getMinSize());
-        Assert.assertEquals(10, poolConfiguration.getMaxSize());
-        Assert.assertEquals(6, poolConfiguration.getInitialSize());
+        Assert.assertEquals(4, poolConfiguration.getInitialSize());
         Assert.assertEquals(10000, poolConfiguration.getBlockingTimeout());
         Assert.assertEquals(false, poolConfiguration.isFair());
         Assert.assertEquals(true, poolConfiguration.isStrictMin());
@@ -206,23 +198,6 @@ public class DatasourcePoolAttributesTestCase extends JcaMgmtBase {
             operation.get("connection-url").set(ds.getConnectionUrl());
             managementClient.getControllerClient().execute(operation);
         }
-
-        @Override
-        public void tearDown(ManagementClient managementClient, String containerId) throws Exception {
-            removeDs(managementClient, DS_NAME);
-            reload();
-        }
-
-        private void removeDs(ManagementClient managementClient, String dsName) throws Exception {
-            ModelNode address = new ModelNode();
-            address.add("subsystem", "datasources");
-            address.add("data-source", dsName);
-            ModelNode operation = new ModelNode();
-            operation.get(OP).set(REMOVE);
-            operation.get(OP_ADDR).set(address);
-            managementClient.getControllerClient().execute(operation);
-        }
-
     }
 
 

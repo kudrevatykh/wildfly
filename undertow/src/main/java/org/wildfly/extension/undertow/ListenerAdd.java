@@ -22,16 +22,16 @@
 
 package org.wildfly.extension.undertow;
 
-import static org.wildfly.extension.undertow.Capabilities.REF_BUFFER_POOL;
 import static org.wildfly.extension.undertow.Capabilities.REF_IO_WORKER;
 import static org.wildfly.extension.undertow.Capabilities.REF_SOCKET_BINDING;
 import static org.wildfly.extension.undertow.ListenerResourceDefinition.LISTENER_CAPABILITY;
 import static org.wildfly.extension.undertow.ServerDefinition.SERVER_CAPABILITY;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
+import io.undertow.connector.ByteBufferPool;
 import io.undertow.server.handlers.DisallowedMethodsHandler;
 import io.undertow.server.handlers.PeerNameResolvingHandler;
 import io.undertow.servlet.handlers.MarkSecureHandler;
@@ -44,10 +44,8 @@ import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.network.SocketBinding;
 import org.jboss.dmr.ModelNode;
-import org.jboss.msc.inject.Injector;
 import org.wildfly.extension.io.OptionList;
 import org.xnio.OptionMap;
-import org.xnio.Pool;
 import org.xnio.XnioWorker;
 
 /**
@@ -93,14 +91,18 @@ abstract class ListenerAdd extends AbstractAddStepHandler {
         }
         List<String> disallowedMethods = ListenerResourceDefinition.DISALLOWED_METHODS.unwrap(context, model);
         if(!disallowedMethods.isEmpty()) {
-            final Set<HttpString> methodSet = disallowedMethods.stream().map(i -> new HttpString(i.trim())).collect(Collectors.toSet());
+            final Set<HttpString> methodSet = new HashSet<>();
+            for (String i : disallowedMethods) {
+                HttpString httpString = new HttpString(i.trim());
+                methodSet.add(httpString);
+            }
             service.addWrapperHandler(handler -> new DisallowedMethodsHandler(handler, methodSet));
         }
 
         final CapabilityServiceBuilder<? extends UndertowListener> serviceBuilder = context.getCapabilityServiceTarget().addCapability(ListenerResourceDefinition.LISTENER_CAPABILITY, service);
         serviceBuilder.addCapabilityRequirement(REF_IO_WORKER, XnioWorker.class, service.getWorker(), workerName)
                 .addCapabilityRequirement(REF_SOCKET_BINDING, SocketBinding.class, service.getBinding(), bindingRef)
-                .addCapabilityRequirement(REF_BUFFER_POOL, Pool.class, (Injector) service.getBufferPool(), bufferPoolName)
+                .addCapabilityRequirement(Capabilities.CAPABILITY_BYTE_BUFFER_POOL, ByteBufferPool.class, service.getBufferPool(), bufferPoolName)
                 .addCapabilityRequirement(Capabilities.CAPABILITY_SERVER, Server.class, service.getServerService(), serverName)
                 .addAliases(UndertowService.listenerName(name))
                 ;

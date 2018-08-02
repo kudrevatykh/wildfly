@@ -84,6 +84,8 @@ import org.wildfly.security.auth.server.SecurityDomain;
 import org.wildfly.security.auth.server.SecurityIdentity;
 import org.wildfly.security.authz.Roles;
 import org.wildfly.security.manager.WildFlySecurityManager;
+import org.wildfly.transaction.client.ContextTransactionManager;
+import org.wildfly.transaction.client.ContextTransactionSynchronizationRegistry;
 
 /**
  * @author <a href="mailto:cdewolf@redhat.com">Carlo de Wolf</a>
@@ -94,6 +96,7 @@ public abstract class EJBComponent extends BasicComponent implements ServerActiv
 
     private final Map<MethodTransactionAttributeKey, TransactionAttributeType> txAttrs;
     private final Map<MethodTransactionAttributeKey, Integer> txTimeouts;
+    private final Map<MethodTransactionAttributeKey, Boolean> txExplicitAttrs;
 
     private final EJBUtilities utilities;
     private final boolean isBeanManagedTransaction;
@@ -117,8 +120,6 @@ public abstract class EJBComponent extends BasicComponent implements ServerActiv
     private final InvocationMetrics invocationMetrics = new InvocationMetrics();
     private final EJBSuspendHandlerService ejbSuspendHandlerService;
     private final ShutDownInterceptorFactory shutDownInterceptorFactory;
-    private final TransactionManager transactionManager;
-    private final TransactionSynchronizationRegistry transactionSynchronizationRegistry;
     private final UserTransaction userTransaction;
     private final ServerSecurityManager serverSecurityManager;
     private final ControlPoint controlPoint;
@@ -152,8 +153,10 @@ public abstract class EJBComponent extends BasicComponent implements ServerActiv
         final Map<MethodTransactionAttributeKey, TransactionAttributeType> txAttrs = ejbComponentCreateService.getTxAttrs();
         if (txAttrs == null || txAttrs.isEmpty()) {
             this.txAttrs = Collections.emptyMap();
+            this.txExplicitAttrs = Collections.emptyMap();
         } else {
             this.txAttrs = txAttrs;
+            this.txExplicitAttrs = ejbComponentCreateService.getExplicitTxAttrs();
         }
         final Map<MethodTransactionAttributeKey, Integer> txTimeouts = ejbComponentCreateService.getTxTimeouts();
         if (txTimeouts == null || txTimeouts.isEmpty()) {
@@ -181,8 +184,6 @@ public abstract class EJBComponent extends BasicComponent implements ServerActiv
         this.timeoutInterceptors = Collections.unmodifiableMap(ejbComponentCreateService.getTimeoutInterceptors());
         this.shutDownInterceptorFactory = ejbComponentCreateService.getShutDownInterceptorFactory();
         this.ejbSuspendHandlerService = ejbComponentCreateService.getEJBSuspendHandler();
-        this.transactionManager = ejbComponentCreateService.getTransactionManager();
-        this.transactionSynchronizationRegistry = ejbComponentCreateService.getTransactionSynchronizationRegistry();
         this.userTransaction = ejbComponentCreateService.getUserTransaction();
         this.serverSecurityManager = ejbComponentCreateService.getServerSecurityManager();
         this.controlPoint = ejbComponentCreateService.getControlPoint();
@@ -397,12 +398,34 @@ public abstract class EJBComponent extends BasicComponent implements ServerActiv
             return defaultType;
         return txAttr;
     }
-    public TransactionManager getTransactionManager() {
-        return this.transactionManager;
+
+    public boolean isTransactionAttributeTypeExplicit(final MethodIntf methodIntf, final MethodIdentifier method) {
+        Boolean txAttr = txExplicitAttrs.get(new MethodTransactionAttributeKey(methodIntf, method));
+        //fall back to type bean if not found
+        if (txAttr == null && methodIntf != MethodIntf.BEAN) {
+            txAttr = txExplicitAttrs.get(new MethodTransactionAttributeKey(MethodIntf.BEAN, method));
+        }
+        if (txAttr == null)
+            return false;
+        return txAttr;
     }
 
+    /**
+     * @deprecated Use {@link ContextTransactionManager#getInstance()} instead.
+     * @return the value of {@link ContextTransactionManager#getInstance()}
+     */
+    @Deprecated
+    public TransactionManager getTransactionManager() {
+        return ContextTransactionManager.getInstance();
+    }
+
+    /**
+     * @deprecated Use {@link ContextTransactionSynchronizationRegistry#getInstance()} instead.
+     * @return the value of {@link ContextTransactionSynchronizationRegistry#getInstance()}
+     */
+    @Deprecated
     public TransactionSynchronizationRegistry getTransactionSynchronizationRegistry() {
-        return this.transactionSynchronizationRegistry;
+        return ContextTransactionSynchronizationRegistry.getInstance();
     }
 
     public int getTransactionTimeout(final MethodIntf methodIntf, final Method method) {
@@ -540,14 +563,6 @@ public abstract class EJBComponent extends BasicComponent implements ServerActiv
         return ejbLocalObjectViewServiceName;
     }
 
-    public ServiceName getEjbLocalHomeViewServiceName() {
-        return ejbLocalHomeViewServiceName;
-    }
-
-    public ServiceName getEjbHomeViewServiceName() {
-        return ejbHomeViewServiceName;
-    }
-
     public ServiceName getEjbObjectViewServiceName() {
         return ejbObjectViewServiceName;
     }
@@ -581,9 +596,9 @@ public abstract class EJBComponent extends BasicComponent implements ServerActiv
     }
 
     @Override
-    public synchronized void start() {
+    public synchronized void init() {
         getShutDownInterceptorFactory().start();
-        super.start();
+        super.init();
         if(this.timerService instanceof TimerServiceImpl) {
             ((TimerServiceImpl) this.timerService).activate();
         }

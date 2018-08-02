@@ -30,7 +30,11 @@
     <parent>
         <groupId>org.wildfly</groupId>
         <artifactId>wildfly-parent</artifactId>
-        <version>11.0.0.Final-SNAPSHOT</version>
+        <!--
+        Maintain separation between the artifact id and the version to help prevent
+        merge conflicts between commits changing the GA and those changing the V.
+        -->
+        <version>14.0.0.Beta2-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-servlet-feature-pack</artifactId>
@@ -110,6 +114,11 @@
         </dependency>
 
         <dependency>
+            <groupId>javax.json</groupId>
+            <artifactId>javax.json-api</artifactId>
+        </dependency>
+
+        <dependency>
             <groupId>javax.validation</groupId>
             <artifactId>validation-api</artifactId>
         </dependency>
@@ -125,8 +134,18 @@
         </dependency>
 
         <dependency>
+            <groupId>javax.json.bind</groupId>
+            <artifactId>javax.json.bind-api</artifactId>
+        </dependency>
+
+        <dependency>
             <groupId>org.eclipse.jdt.core.compiler</groupId>
             <artifactId>ecj</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.eclipse</groupId>
+            <artifactId>yasson</artifactId>
         </dependency>
 
         <dependency>
@@ -137,6 +156,17 @@
         <dependency>
             <groupId>org.glassfish</groupId>
             <artifactId>javax.el-impl</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.glassfish</groupId>
+            <artifactId>javax.json</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
@@ -183,7 +213,7 @@
 
         <dependency>
             <groupId>org.jboss.spec.javax.annotation</groupId>
-            <artifactId>jboss-annotations-api_1.2_spec</artifactId>
+            <artifactId>jboss-annotations-api_1.3_spec</artifactId>
         </dependency>
 
         <dependency>
@@ -199,6 +229,11 @@
         <dependency>
             <groupId>org.jboss.spec.javax.security.auth.message</groupId>
             <artifactId>jboss-jaspi-api_1.1_spec</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jboss.spec.javax.servlet</groupId>
+            <artifactId>jboss-servlet-api_4.0_spec</artifactId>
         </dependency>
 
         <dependency>
@@ -332,7 +367,7 @@
         </dependency>
 
         <dependency>
-            <groupId>org.wildfly</groupId>
+            <groupId>${project.groupId}</groupId>
             <artifactId>wildfly-clustering-common</artifactId>
             <exclusions>
                 <exclusion>
@@ -343,7 +378,7 @@
         </dependency>
 
         <dependency>
-            <groupId>org.wildfly</groupId>
+            <groupId>${project.groupId}</groupId>
             <artifactId>wildfly-clustering-service</artifactId>
             <exclusions>
                 <exclusion>
@@ -354,7 +389,7 @@
         </dependency>
 
         <dependency>
-            <groupId>org.wildfly</groupId>
+            <groupId>${project.groupId}</groupId>
             <artifactId>wildfly-ee</artifactId>
             <exclusions>
                 <exclusion>
@@ -365,7 +400,7 @@
         </dependency>
 
         <dependency>
-            <groupId>org.wildfly</groupId>
+            <groupId>${project.groupId}</groupId>
             <artifactId>wildfly-naming</artifactId>
             <exclusions>
                 <exclusion>
@@ -387,7 +422,7 @@
         </dependency>
 
         <dependency>
-            <groupId>org.wildfly</groupId>
+            <groupId>${project.groupId}</groupId>
             <artifactId>wildfly-security</artifactId>
             <exclusions>
                 <exclusion>
@@ -398,7 +433,7 @@
         </dependency>
 
         <dependency>
-            <groupId>org.wildfly</groupId>
+            <groupId>${project.groupId}</groupId>
             <artifactId>wildfly-undertow</artifactId>
             <exclusions>
                 <exclusion>
@@ -409,7 +444,7 @@
         </dependency>
 
         <dependency>
-            <groupId>org.wildfly</groupId>
+            <groupId>${project.groupId}</groupId>
             <artifactId>wildfly-web-common</artifactId>
             <exclusions>
                 <exclusion>
@@ -432,7 +467,7 @@
     </dependencies>
 
     <build>
-        <finalName>${server.output.dir.prefix}-servlet-${project.version}</finalName>
+        <finalName>${server.output.dir.prefix}-servlet-${server.output.dir.version}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -471,7 +506,7 @@
                                 <descriptor>assembly.xml</descriptor>
                             </descriptors>
                             <recompressZippedFiles>true</recompressZippedFiles>
-                            <finalName>${server.output.dir.prefix}-servlet-feature-pack-${project.version}</finalName>
+                            <finalName>${server.output.dir.prefix}-servlet-feature-pack-${server.output.dir.version}</finalName>
                             <appendAssemblyId>false</appendAssemblyId>
                             <outputDirectory>${project.build.directory}</outputDirectory>
                             <workDirectory>${project.build.directory}/assembly/work</workDirectory>
@@ -495,44 +530,19 @@
             <build>
                 <plugins>
                     <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-resources-plugin</artifactId>
-                        <executions>
-                            <execution>
-                                <id>copy-licenses-xml</id>
-                                <phase>prepare-package</phase>
-                                <goals>
-                                    <goal>copy-resources</goal>
-                                </goals>
-                                <configuration>
-                                    <outputDirectory>${license.directory}</outputDirectory>
-                                    <resources>
-                                        <resource>
-                                            <directory>${project.basedir}/src/license</directory>
-                                            <includes>
-                                                <include>*licenses.xml</include>
-                                            </includes>
-                                            <filtering>false</filtering>
-                                        </resource>
-                                    </resources>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <plugin>
                         <groupId>org.wildfly.maven.plugins</groupId>
                         <artifactId>licenses-plugin</artifactId>
                         <inherited>false</inherited>
                         <executions>
                             <execution>
-                                <id>update-licenses-xml</id>
+                                <id>generate-licenses-xml</id>
                                 <goals>
                                     <goal>insert-versions</goal>
                                 </goals>
-                                <phase>prepare-package</phase>
+                                <phase>prepare-package</phase><!-- TODO why not generate-resources? -->
                                 <configuration>
                                     <sortByGroupIdAndArtifactId>true</sortByGroupIdAndArtifactId>
-                                    <licensesOutputDirectory>${license.directory}</licensesOutputDirectory>
+                                    <licensesConfigFile>${project.basedir}/src/license/servlet-feature-pack-licenses.xml</licensesConfigFile>
                                     <licensesOutputFile>${license.directory}/servlet-feature-pack-licenses.xml</licensesOutputFile>
                                 </configuration>
                             </execution>
@@ -625,6 +635,44 @@
                             </execution>
                         </executions>
 
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>enforce-product</id>
+            <activation>
+                <property>
+                    <name>enforce-product</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-enforcer-plugin</artifactId>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.jboss.maven.plugins.enforcer.rules</groupId>
+                                <artifactId>version-enforcer-rule</artifactId>
+                                <version>1.0.0</version>
+                            </dependency>
+                        </dependencies>
+                        <executions>
+                            <execution>
+                                <id>ban-non-product-deps</id>
+                                <goals>
+                                    <goal>enforce</goal>
+                                </goals>
+                                <configuration>
+                                    <rules>
+                                        <rule implementation="org.jboss.maven.plugins.enforcer.rules.version.BanVersionDependenciesRule">
+                                          <versionPattern>^((?!redhat).)*$</versionPattern>
+                                        </rule>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
                     </plugin>
                 </plugins>
             </build>

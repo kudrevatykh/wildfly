@@ -39,6 +39,7 @@ import org.jboss.as.controller.PersistentResourceDefinition;
 import org.jboss.as.controller.PropertiesAttributeDefinition;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.naming.InitialContext;
+import org.jboss.as.naming.service.DefaultNamespaceContextSelectorService;
 import org.jboss.as.network.SocketBinding;
 import org.jboss.as.server.AbstractDeploymentChainStep;
 import org.jboss.as.server.DeploymentProcessorTarget;
@@ -93,16 +94,9 @@ import org.jboss.as.controller.AbstractBoottimeAddStepHandler;
  */
 public class IIOPSubsystemAdd extends AbstractBoottimeAddStepHandler {
 
-    private static final String SSL_CONTEXT_CAPABILITY = "org.wildfly.security.ssl-context";
-
-    private static final String AUTH_CONTEXT_CAPABILITY = "org.wildfly.security.authentication-context";
-
     public IIOPSubsystemAdd(final Collection<? extends AttributeDefinition> attributes) {
         super(attributes);
     }
-
-    private static final ServiceName SECURITY_DOMAIN_SERVICE_NAME = ServiceName.JBOSS.append("security").append(
-            "security-domain");
 
     @Override
     protected void performBoottime(final OperationContext context, final ModelNode operation, final ModelNode model) throws OperationFailedException {
@@ -152,8 +146,8 @@ public class IIOPSubsystemAdd extends AbstractBoottimeAddStepHandler {
         context.addStep(new AbstractDeploymentChainStep() {
             public void execute(DeploymentProcessorTarget processorTarget) {
                 processorTarget.addDeploymentProcessor(IIOPExtension.SUBSYSTEM_NAME, Phase.DEPENDENCIES,
-                        Phase.DEPENDENCIES_JDKORB, new IIOPDependencyProcessor());
-                processorTarget.addDeploymentProcessor(IIOPExtension.SUBSYSTEM_NAME, Phase.PARSE, Phase.PARSE_JDKORB,
+                        Phase.DEPENDENCIES_IIOP_OPENJDK, new IIOPDependencyProcessor());
+                processorTarget.addDeploymentProcessor(IIOPExtension.SUBSYSTEM_NAME, Phase.PARSE, Phase.PARSE_IIOP_OPENJDK,
                         new IIOPMarkerProcessor());
             }
         }, OperationContext.Stage.RUNTIME);
@@ -174,25 +168,27 @@ public class IIOPSubsystemAdd extends AbstractBoottimeAddStepHandler {
 
         // if a security domain has been specified, add a dependency to the domain service.
         String securityDomain = props.getProperty(Constants.SECURITY_SECURITY_DOMAIN);
-        if (securityDomain != null)
-            builder.addDependency(SECURITY_DOMAIN_SERVICE_NAME.append(securityDomain));
+        if (securityDomain != null) {
+            builder.addDependency(context.getCapabilityServiceName(Capabilities.LEGACY_SECURITY_DOMAIN_CAPABILITY, securityDomain, null));
+            builder.addDependency(DefaultNamespaceContextSelectorService.SERVICE_NAME);
+        }
 
         // add dependencies to the ssl context services if needed.
         final String serverSSLContextName = props.getProperty(Constants.SERVER_SSL_CONTEXT);
         if (serverSSLContextName != null) {
-            ServiceName serverContextServiceName = context.getCapabilityServiceName(SSL_CONTEXT_CAPABILITY, serverSSLContextName, SSLContext.class);
+            ServiceName serverContextServiceName = context.getCapabilityServiceName(Capabilities.SSL_CONTEXT_CAPABILITY, serverSSLContextName, SSLContext.class);
             builder.addDependency(serverContextServiceName);
         }
         final String clientSSLContextName = props.getProperty(Constants.CLIENT_SSL_CONTEXT);
         if (clientSSLContextName != null) {
-            ServiceName clientContextServiceName = context.getCapabilityServiceName(SSL_CONTEXT_CAPABILITY, clientSSLContextName, SSLContext.class);
+            ServiceName clientContextServiceName = context.getCapabilityServiceName(Capabilities.SSL_CONTEXT_CAPABILITY, clientSSLContextName, SSLContext.class);
             builder.addDependency(clientContextServiceName);
         }
 
         // if an authentication context has ben specified, add a dependency to its service.
         final String authContext = props.getProperty(Constants.ORB_INIT_AUTH_CONTEXT);
         if (authContext != null) {
-            ServiceName authContextServiceName = context.getCapabilityServiceName(AUTH_CONTEXT_CAPABILITY, authContext, AuthenticationContext.class);
+            ServiceName authContextServiceName = context.getCapabilityServiceName(Capabilities.AUTH_CONTEXT_CAPABILITY, authContext, AuthenticationContext.class);
             builder.addDependency(authContextServiceName);
         }
 

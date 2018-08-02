@@ -161,6 +161,35 @@ class ServletContainerDefinition extends PersistentResourceDefinition {
                     .setAllowExpression(true)
                     .build();
 
+    protected static final AttributeDefinition FILE_CACHE_METADATA_SIZE =
+            new SimpleAttributeDefinitionBuilder(Constants.FILE_CACHE_METADATA_SIZE, ModelType.INT, true)
+                    .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
+                    .setDefaultValue(new ModelNode(100))
+                    .setAllowExpression(true)
+                    .build();
+
+    protected static final AttributeDefinition FILE_CACHE_MAX_FILE_SIZE =
+            new SimpleAttributeDefinitionBuilder(Constants.FILE_CACHE_MAX_FILE_SIZE, ModelType.INT, true)
+                    .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
+                    .setDefaultValue(new ModelNode(10 * 1024 * 1024))
+                    .setAllowExpression(true)
+                    .build();
+
+    protected static final AttributeDefinition FILE_CACHE_TIME_TO_LIVE =
+            new SimpleAttributeDefinitionBuilder(Constants.FILE_CACHE_TIME_TO_LIVE, ModelType.INT, true)
+                    .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
+                    .setAllowExpression(true)
+                    .build();
+
+
+    protected static final AttributeDefinition DEFAULT_COOKIE_VERSION =
+            new SimpleAttributeDefinitionBuilder(Constants.DEFAULT_COOKIE_VERSION, ModelType.INT, true)
+                    .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
+                    .setAllowExpression(true)
+                    .setDefaultValue(new ModelNode(0))
+                    .setValidator(new IntRangeValidator(0, 1, true,true))
+                    .build();
+
     private static final List<? extends PersistentResourceDefinition> CHILDREN;
     static final Collection<AttributeDefinition> ATTRIBUTES = Arrays.asList(
             ALLOW_NON_STANDARD_WRAPPERS,
@@ -177,7 +206,11 @@ class ServletContainerDefinition extends PersistentResourceDefinition {
             SESSION_ID_LENGTH,
             MAX_SESSIONS,
             DISABLE_FILE_WATCH_SERVICE,
-            DISABLE_SESSION_ID_REUSE
+            DISABLE_SESSION_ID_REUSE,
+            FILE_CACHE_METADATA_SIZE,
+            FILE_CACHE_MAX_FILE_SIZE,
+            FILE_CACHE_TIME_TO_LIVE,
+            DEFAULT_COOKIE_VERSION
             );
 
     static final ServletContainerDefinition INSTANCE = new ServletContainerDefinition();

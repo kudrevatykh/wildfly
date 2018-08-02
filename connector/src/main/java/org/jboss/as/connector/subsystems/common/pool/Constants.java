@@ -133,19 +133,20 @@ public class Constants {
             .setXmlName(Pool.Tag.MAX_POOL_SIZE.getLocalName())
             .setAllowExpression(true)
             .setDefaultValue(new ModelNode(Defaults.MAX_POOL_SIZE))
+            .setRestartAllServices()
             .build();
 
     public static final SimpleAttributeDefinition MIN_POOL_SIZE = new SimpleAttributeDefinitionBuilder(MIN_POOL_SIZE_NAME, ModelType.INT, true)
             .setXmlName(Pool.Tag.MIN_POOL_SIZE.getLocalName())
             .setAllowExpression(true)
             .setDefaultValue(new ModelNode(Defaults.MIN_POOL_SIZE))
+            .setRestartAllServices()
             .build();
 
     public static final SimpleAttributeDefinition INITIAL_POOL_SIZE = new SimpleAttributeDefinitionBuilder(INITIAL_POOL_SIZE_NAME, ModelType.INT)
             .setXmlName(Pool.Tag.INITIAL_POOL_SIZE.getLocalName())
             .setAllowExpression(true)
             .setRequired(false)
-            .setDefaultValue(new ModelNode(Defaults.MIN_POOL_SIZE))
             .build();
 
     public static SimpleAttributeDefinition CAPACITY_INCREMENTER_CLASS = new SimpleAttributeDefinitionBuilder(CAPACITY_INCREMENTER_CLASS_NAME, ModelType.STRING, true)

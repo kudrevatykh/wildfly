@@ -15,7 +15,11 @@
     <parent>
         <groupId>org.wildfly</groupId>
         <artifactId>wildfly-ts-integ</artifactId>
-        <version>11.0.0.Final-SNAPSHOT</version>
+        <!--
+        Maintain separation between the artifact id and the version to help prevent
+        merge conflicts between commits changing the GA and those changing the V.
+        -->
+        <version>14.0.0.Beta2-SNAPSHOT</version>
     </parent>
 
     <!-- ********************************************************************************** -->
@@ -60,36 +64,11 @@
                     <!-- Parameters to test cases. -->
                     <systemPropertyVariables combine.children="append">
                         <jboss.server.config.file.name>standalone.xml</jboss.server.config.file.name>
-                        <jboss.inst>${basedir}/target/jbossas</jboss.inst>
                     </systemPropertyVariables>
                     <additionalClasspathElements>
                         <additionalClasspathElement>${project.basedir}/../src/test/resources</additionalClasspathElement>
                     </additionalClasspathElements>
                 </configuration>
-            </plugin>
-            <!-- Resources plugin. -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-resources-plugin</artifactId>
-                <executions combine.children="append">
-                    <!-- Copy keystores from common resources. -->
-                    <execution>
-                        <id>ts.integ.web.copy-keystores</id>
-                        <phase>generate-test-resources</phase>
-                        <goals><goal>copy-resources</goal></goals>
-                        <inherited>true</inherited>
-                        <configuration>
-                            <outputDirectory>${basedir}/target/jbossas/standalone/configuration</outputDirectory>
-                            <overwrite>true</overwrite>
-                            <resources>
-                                <resource>
-                                    <directory>../../shared/target/shared-keystores</directory>
-                                    <includes><include>application.keystore</include></includes>
-                                </resource>
-                            </resources>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>

@@ -223,15 +223,11 @@ public class MessageDrivenComponent extends EJBComponent implements PooledCompon
         this.endpoint = endpoint;
     }
 
+
     @Override
-    public void start() {
-        if (endpoint == null) {
-            throw EjbLogger.ROOT_LOGGER.endpointUnAvailable(this.getComponentName());
-        }
+    public void start(){
 
         super.start();
-
-        suspendController.registerActivity(serverActivity);
 
         synchronized (this) {
             this.started = true;
@@ -239,11 +235,21 @@ public class MessageDrivenComponent extends EJBComponent implements PooledCompon
                 this.activate();
             }
         }
+    }
+
+    @Override
+    public void init() {
+        if (endpoint == null) {
+            throw EjbLogger.ROOT_LOGGER.endpointUnAvailable(this.getComponentName());
+        }
+
+        super.init();
+
+        suspendController.registerActivity(serverActivity);
 
         if (this.pool != null) {
             this.pool.start();
         }
-
     }
 
     @Override
@@ -269,8 +275,8 @@ public class MessageDrivenComponent extends EJBComponent implements PooledCompon
             WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(classLoader);
 
             this.endpoint.activate(endpointFactory, activationSpec);
-        } catch (ResourceException e) {
-            throw new RuntimeException(e);
+        } catch (Exception e) {
+            throw EjbLogger.ROOT_LOGGER.failedToActivateMdb(getComponentName(), e);
         } finally {
             WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(oldTccl);
         }

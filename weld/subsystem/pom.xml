@@ -6,7 +6,11 @@
    <parent>
       <groupId>org.wildfly</groupId>
       <artifactId>wildfly-weld-parent</artifactId>
-      <version>11.0.0.Final-SNAPSHOT</version>
+      <!--
+        Maintain separation between the artifact id and the version to help prevent
+        merge conflicts between commits changing the GA and those changing the V.
+        -->
+      <version>14.0.0.Beta2-SNAPSHOT</version>
    </parent>
 
    <artifactId>wildfly-weld</artifactId>
@@ -29,7 +33,7 @@
                      <artifactItems>
                         <artifactItem>
                            <groupId>org.jboss.spec.javax.annotation</groupId>
-                           <artifactId>jboss-annotations-api_1.2_spec</artifactId>
+                           <artifactId>jboss-annotations-api_1.3_spec</artifactId>
                         </artifactItem>
                      </artifactItems>
                      <outputDirectory>${project.build.directory}/endorsed</outputDirectory>
@@ -43,12 +47,12 @@
    <dependencies>
 
       <dependency>
-         <groupId>org.wildfly</groupId>
+         <groupId>${project.groupId}</groupId>
          <artifactId>wildfly-ee</artifactId>
       </dependency>
 
       <dependency>
-         <groupId>org.wildfly</groupId>
+         <groupId>${project.groupId}</groupId>
          <artifactId>wildfly-naming</artifactId>
       </dependency>
 
@@ -63,12 +67,12 @@
       </dependency>
 
       <dependency>
-         <groupId>org.wildfly</groupId>
+         <groupId>${project.groupId}</groupId>
          <artifactId>wildfly-web-common</artifactId>
       </dependency>
 
       <dependency>
-         <groupId>org.wildfly</groupId>
+         <groupId>${project.groupId}</groupId>
          <artifactId>wildfly-security</artifactId>
       </dependency>
 
@@ -113,7 +117,7 @@
       <!-- Needed for @Resource(lookup=) -->
       <dependency>
          <groupId>org.jboss.spec.javax.annotation</groupId>
-         <artifactId>jboss-annotations-api_1.2_spec</artifactId>
+         <artifactId>jboss-annotations-api_1.3_spec</artifactId>
       </dependency>
 
       <dependency>
@@ -123,7 +127,7 @@
 
       <dependency>
          <groupId>org.jboss.spec.javax.servlet</groupId>
-         <artifactId>jboss-servlet-api_3.1_spec</artifactId>
+         <artifactId>jboss-servlet-api_4.0_spec</artifactId>
       </dependency>
 
       <dependency>
@@ -142,17 +146,32 @@
       </dependency>
 
       <dependency>
+         <groupId>org.jboss.weld.module</groupId>
+         <artifactId>weld-ejb</artifactId>
+      </dependency>
+
+      <dependency>
+         <groupId>org.jboss.weld.module</groupId>
+         <artifactId>weld-web</artifactId>
+      </dependency>
+
+      <dependency>
+         <groupId>org.jboss.weld.module</groupId>
+         <artifactId>weld-jta</artifactId>
+      </dependency>
+
+      <dependency>
          <groupId>org.jboss.weld</groupId>
          <artifactId>weld-spi</artifactId>
       </dependency>
 
       <dependency>
-         <groupId>org.wildfly</groupId>
+         <groupId>${project.groupId}</groupId>
          <artifactId>wildfly-weld-spi</artifactId>
       </dependency>
 
       <dependency>
-         <groupId>org.wildfly</groupId>
+         <groupId>${project.groupId}</groupId>
          <artifactId>wildfly-weld-common</artifactId>
       </dependency>
 

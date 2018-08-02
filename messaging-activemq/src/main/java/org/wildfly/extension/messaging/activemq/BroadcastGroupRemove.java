@@ -22,13 +22,17 @@
 
 package org.wildfly.extension.messaging.activemq;
 
+import static org.wildfly.extension.messaging.activemq.BroadcastGroupDefinition.CAPABILITY;
+import static org.wildfly.extension.messaging.activemq.BroadcastGroupDefinition.JGROUPS_CHANNEL;
+import static org.wildfly.extension.messaging.activemq.CommonAttributes.JGROUPS_CLUSTER;
+
 import org.jboss.as.controller.AbstractRemoveStepHandler;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
-import org.jboss.as.controller.capability.RuntimeCapability;
+import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.dmr.ModelNode;
-import org.wildfly.clustering.jgroups.spi.JGroupsDefaultRequirement;
+import org.wildfly.clustering.spi.ClusteringDefaultRequirement;
 
 /**
  * Removes a broadcast group.
@@ -45,18 +49,14 @@ public class BroadcastGroupRemove extends AbstractRemoveStepHandler {
 
     @Override
     protected void recordCapabilitiesAndRequirements(OperationContext context, ModelNode operation, Resource resource) throws OperationFailedException {
-        //super.recordCapabilitiesAndRequirements(context, operation, resource);
-
-        String broadcastGroupName = context.getCurrentAddressValue();
-        String serverName = context.getCurrentAddress().getParent().getLastElement().getValue();
-        String compositeName = serverName + "." + broadcastGroupName;
-
-        context.deregisterCapability(BroadcastGroupDefinition.CHANNEL_FACTORY_CAPABILITY.getDynamicName(compositeName));
+        PathAddress address = context.getCurrentAddress();
 
         ModelNode model = resource.getModel();
-        if (CommonAttributes.JGROUPS_CHANNEL.resolveModelAttribute(context, model).isDefined() && !BroadcastGroupDefinition.JGROUPS_STACK.resolveModelAttribute(context, model).isDefined()) {
-            context.deregisterCapabilityRequirement(JGroupsDefaultRequirement.CHANNEL_FACTORY.getName(), RuntimeCapability.buildDynamicCapabilityName(BroadcastGroupDefinition.CHANNEL_FACTORY_CAPABILITY.getName(), compositeName));
+        if (JGROUPS_CLUSTER.resolveModelAttribute(context, model).isDefined() && !JGROUPS_CHANNEL.resolveModelAttribute(context, model).isDefined()) {
+            context.deregisterCapabilityRequirement(ClusteringDefaultRequirement.COMMAND_DISPATCHER_FACTORY.getName(), CAPABILITY.getDynamicName(address));
         }
+
+        context.deregisterCapability(CAPABILITY.getDynamicName(address));
     }
 
     @Override

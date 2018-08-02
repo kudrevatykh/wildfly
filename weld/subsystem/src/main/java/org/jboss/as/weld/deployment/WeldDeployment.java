@@ -26,6 +26,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -36,6 +37,7 @@ import org.jboss.as.weld.WeldModuleResourceLoader;
 import org.jboss.as.weld.deployment.BeanDeploymentArchiveImpl.BeanArchiveType;
 import org.jboss.as.weld.logging.WeldLogger;
 import org.jboss.as.weld.services.bootstrap.ProxyServicesImpl;
+import org.jboss.as.weld.util.Reflections;
 import org.jboss.modules.Module;
 import org.jboss.modules.ModuleIdentifier;
 import org.jboss.weld.bootstrap.api.Service;
@@ -182,10 +184,21 @@ public class WeldDeployment implements CDI11Deployment {
             id = module.getIdentifier() + ADDITIONAL_CLASSES_BDA_SUFFIX;
         }
         BeanDeploymentArchiveImpl newBda = new BeanDeploymentArchiveImpl(Collections.singleton(beanClass.getName()),
-                BeansXml.EMPTY_BEANS_XML, module, id, BeanArchiveType.SYNTHETIC, false);
+                Collections.singleton(beanClass.getName()), BeansXml.EMPTY_BEANS_XML, module, id, BeanArchiveType.SYNTHETIC, false);
         WeldLogger.DEPLOYMENT_LOGGER.beanArchiveDiscovered(newBda);
         newBda.addBeanClass(beanClass);
-        newBda.getServices().addAll(serviceRegistry.entrySet());
+        ServiceRegistry newBdaServices = newBda.getServices();
+        for (Entry<Class<? extends Service>, Service> entry : serviceRegistry.entrySet()) {
+            // Do not overwrite existing services
+            if (!newBdaServices.contains(entry.getKey())) {
+                newBdaServices.add(entry.getKey(), Reflections.cast(entry.getValue()));
+            }
+        }
+        if (module == null) {
+            // For bootstrapClassLoaderBeanDeploymentArchive always use the parent ResourceLoader
+            newBdaServices.add(ResourceLoader.class, serviceRegistry.get(ResourceLoader.class));
+        }
+
         if (module != null && eeModuleDescriptors.containsKey(module.getIdentifier())) {
             newBda.getServices().add(EEModuleDescriptor.class, eeModuleDescriptors.get(module.getIdentifier()));
         }
@@ -235,7 +248,8 @@ public class WeldDeployment implements CDI11Deployment {
         ClassLoader moduleClassLoader = WildFlySecurityManager.getClassLoaderPrivileged(beanClass);
         if (moduleClassLoader != null) {
             for (BeanDeploymentArchiveImpl bda : beanDeploymentArchives) {
-                if (bda.getBeanClasses().contains(beanClass.getName()) && moduleClassLoader.equals(bda.getClassLoader())) {
+                // search in all known classes in that archive
+                if (bda.getKnownClasses().contains(beanClass.getName()) && moduleClassLoader.equals(bda.getClassLoader())) {
                     return bda;
                 }
             }

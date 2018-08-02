@@ -22,21 +22,14 @@
 
 package org.jboss.as.test.clustering.cluster.ejb.remote;
 
-import java.util.PropertyPermission;
 import java.util.concurrent.Callable;
 import java.util.function.UnaryOperator;
 
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.container.test.api.TargetsContainer;
-import org.jboss.as.test.clustering.cluster.ejb.remote.bean.Incrementor;
-import org.jboss.as.test.clustering.cluster.ejb.remote.bean.IncrementorBean;
-import org.jboss.as.test.clustering.cluster.ejb.remote.bean.Result;
 import org.jboss.as.test.clustering.cluster.ejb.remote.bean.SecureStatelessIncrementorBean;
-import org.jboss.as.test.clustering.ejb.EJBDirectory;
-import org.jboss.as.test.shared.integration.ejb.security.PermissionUtils;
+import org.jboss.as.test.clustering.ejb.RemoteEJBDirectory;
 import org.jboss.shrinkwrap.api.Archive;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.wildfly.security.auth.client.AuthenticationConfiguration;
 import org.wildfly.security.auth.client.AuthenticationContext;
 import org.wildfly.security.auth.client.MatchRule;
@@ -46,7 +39,7 @@ import org.wildfly.security.auth.client.MatchRule;
  * @author Paul Ferraro
  */
 public abstract class AuthContextRemoteStatelessEJBFailoverTestCase extends AbstractRemoteStatelessEJBFailoverTestCase {
-    private static final String MODULE_NAME = "secure-remote-stateless-ejb-failover-test";
+    private static final String MODULE_NAME = AuthContextRemoteStatelessEJBFailoverTestCase.class.getSimpleName();
 
     static final AuthenticationContext AUTHENTICATION_CONTEXT = AuthenticationContext.captureCurrent().with(
             MatchRule.ALL.matchAbstractType("ejb", "jboss"),
@@ -54,27 +47,19 @@ public abstract class AuthContextRemoteStatelessEJBFailoverTestCase extends Abst
         );
 
     @Deployment(name = DEPLOYMENT_1, managed = false, testable = false)
-    @TargetsContainer(CONTAINER_1)
+    @TargetsContainer(NODE_1)
     public static Archive<?> createDeploymentForContainer1() {
-        return createDeployment();
+        return createDeployment(MODULE_NAME);
     }
 
     @Deployment(name = DEPLOYMENT_2, managed = false, testable = false)
-    @TargetsContainer(CONTAINER_2)
+    @TargetsContainer(NODE_2)
     public static Archive<?> createDeploymentForContainer2() {
-        return createDeployment();
-    }
-
-    private static Archive<?> createDeployment() {
-        return ShrinkWrap.create(JavaArchive.class, MODULE_NAME + ".jar")
-                .addPackage(EJBDirectory.class.getPackage())
-                .addClasses(Result.class, Incrementor.class, IncrementorBean.class, SecureStatelessIncrementorBean.class)
-                .addAsManifestResource(PermissionUtils.createPermissionsXmlAsset(new PropertyPermission(NODE_NAME_PROPERTY, "read")), "permissions.xml")
-                ;
+        return createDeployment(MODULE_NAME);
     }
 
     public AuthContextRemoteStatelessEJBFailoverTestCase(UnaryOperator<Callable<Void>> configurator) {
-        super(MODULE_NAME, SecureStatelessIncrementorBean.class, configurator);
+        super(() -> new RemoteEJBDirectory(MODULE_NAME), SecureStatelessIncrementorBean.class, configurator);
     }
 }
 

@@ -342,7 +342,8 @@ public class HTTPSWebConnectorTestCase {
         WORK_DIR.mkdirs();
         Utils.createKeyMaterial(WORK_DIR);
 
-        TRACE_SECURITY.setup(managementClient, null);
+        // Uncomment if TRACE logging is necessary. Don't leave it on all the time; CI resources aren't free.
+        //TRACE_SECURITY.setup(managementClient, null);
 
         SecurityDomainsSetup.INSTANCE.setup(managementClient, null);
 
@@ -406,19 +407,16 @@ public class HTTPSWebConnectorTestCase {
         final ModelControllerClient client = managementClient.getControllerClient();
 
         // delete https web connectors
-        ModelNode operation = createOpNode("subsystem=undertow/server=default-server/https-listener=" + HTTPS,
-                ModelDescriptionConstants.REMOVE);
-        Utils.applyUpdate(operation, client);
-
         rmHttpsConnector(HTTPS_NAME_VERIFY_NOT_REQUESTED, client);
         rmHttpsConnector(HTTPS_NAME_VERIFY_REQUESTED, client);
         rmHttpsConnector(HTTPS_NAME_VERIFY_REQUIRED, client);
 
-        operation = createOpNode("core-service=management/security-realm=" + HTTPS_REALM, ModelDescriptionConstants.REMOVE);
+        ModelNode operation = createOpNode("core-service=management/security-realm=" + HTTPS_REALM, ModelDescriptionConstants.REMOVE);
         Utils.applyUpdate(operation, client);
 
         FileUtils.deleteDirectory(WORK_DIR);
-        TRACE_SECURITY.tearDown(managementClient, null);
+        // Uncomment if TRACE logging is necessary. Don't leave it on all the time; CI resources aren't free.
+        //TRACE_SECURITY.tearDown(managementClient, null);
     }
 
     private void rmHttpsConnector(String httpsName, ModelControllerClient client) throws Exception {

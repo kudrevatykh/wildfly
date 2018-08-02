@@ -27,7 +27,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.jboss.as.server.deployment.SetupAction;
 import org.jboss.as.weld.logging.WeldLogger;
 import org.jboss.as.weld.services.ModuleGroupSingletonProvider;
-import org.jboss.msc.service.AbstractServiceListener;
+import org.jboss.msc.service.LifecycleEvent;
+import org.jboss.msc.service.LifecycleListener;
 import org.jboss.msc.service.Service;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceController.Mode;
@@ -44,6 +45,7 @@ import org.wildfly.security.manager.WildFlySecurityManager;
  * {@link WeldBootstrapService}
  *
  * @author Stuart Douglas
+ * @see WeldStartCompletionService
  */
 public class WeldStartService implements Service<WeldStartService> {
 
@@ -71,10 +73,10 @@ public class WeldStartService implements Service<WeldStartService> {
          */
         if (runOnce.get()) {
             ServiceController<?> controller = context.getController().getServiceContainer().getService(deploymentServiceName);
-            controller.addListener(new AbstractServiceListener<Object>() {
+            controller.addListener(new LifecycleListener() {
                 @Override
-                public void transition(final ServiceController<?> controller, final ServiceController.Transition transition) {
-                    if( transition.getAfter().equals(ServiceController.Substate.DOWN)) {
+                public void handleEvent(final ServiceController<?> controller, final LifecycleEvent event) {
+                    if (event == LifecycleEvent.DOWN) {
                         controller.setMode(Mode.ACTIVE);
                         controller.removeListener(this);
                     }
@@ -94,7 +96,6 @@ public class WeldStartService implements Service<WeldStartService> {
             bootstrap.getValue().getBootstrap().startInitialization();
             bootstrap.getValue().getBootstrap().deployBeans();
             bootstrap.getValue().getBootstrap().validateBeans();
-            bootstrap.getValue().getBootstrap().endInitialization();
         } finally {
 
             for (SetupAction action : setupActions) {

@@ -22,7 +22,9 @@
 package org.wildfly.clustering.jgroups.spi;
 
 import java.util.List;
+import java.util.Optional;
 
+import org.jboss.as.network.SocketBindingManager;
 import org.jgroups.protocols.TP;
 import org.jgroups.stack.Protocol;
 
@@ -42,5 +44,7 @@ public interface ProtocolStackConfiguration {
 
     String getNodeName();
 
-    RelayConfiguration getRelay();
+    Optional<RelayConfiguration> getRelay();
+
+    SocketBindingManager getSocketBindingManager();
 }

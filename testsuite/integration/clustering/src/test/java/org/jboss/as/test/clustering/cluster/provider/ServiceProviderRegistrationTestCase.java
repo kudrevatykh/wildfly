@@ -1,15 +1,13 @@
 package org.jboss.as.test.clustering.cluster.provider;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import java.util.Collection;
 
 import org.jboss.arquillian.container.test.api.Deployment;
-import org.jboss.arquillian.container.test.api.RunAsClient;
 import org.jboss.arquillian.container.test.api.TargetsContainer;
 import org.jboss.arquillian.junit.Arquillian;
-import org.jboss.as.test.clustering.cluster.ClusterAbstractTestCase;
+import org.jboss.as.test.clustering.cluster.AbstractClusteringTestCase;
 import org.jboss.as.test.clustering.cluster.provider.bean.ServiceProviderRetriever;
 import org.jboss.as.test.clustering.cluster.provider.bean.ServiceProviderRetrieverBean;
 import org.jboss.as.test.clustering.ejb.EJBDirectory;
@@ -21,18 +19,17 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 @RunWith(Arquillian.class)
-@RunAsClient
-public class ServiceProviderRegistrationTestCase extends ClusterAbstractTestCase {
-    private static final String MODULE_NAME = "service-provider-registration";
+public class ServiceProviderRegistrationTestCase extends AbstractClusteringTestCase {
+    private static final String MODULE_NAME = ServiceProviderRegistrationTestCase.class.getSimpleName();
 
     @Deployment(name = DEPLOYMENT_1, managed = false, testable = false)
-    @TargetsContainer(CONTAINER_1)
+    @TargetsContainer(NODE_1)
     public static Archive<?> createDeploymentForContainer1() {
         return createDeployment();
     }
 
     @Deployment(name = DEPLOYMENT_2, managed = false, testable = false)
-    @TargetsContainer(CONTAINER_2)
+    @TargetsContainer(NODE_2)
     public static Archive<?> createDeploymentForContainer2() {
         return createDeployment();
     }
@@ -66,13 +63,13 @@ public class ServiceProviderRegistrationTestCase extends ClusterAbstractTestCase
             assertTrue(names.contains(NODE_1));
             assertTrue(names.contains(NODE_2));
 
-            stop(CONTAINER_2);
+            stop(NODE_2);
 
             names = bean.getProviders();
             assertEquals(1, names.size());
             assertTrue(names.contains(NODE_1));
 
-            start(CONTAINER_2);
+            start(NODE_2);
 
             names = bean.getProviders();
             assertEquals(2, names.size());

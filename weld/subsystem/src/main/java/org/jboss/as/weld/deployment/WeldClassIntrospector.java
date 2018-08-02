@@ -7,6 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 import javax.enterprise.context.spi.CreationalContext;
+import javax.enterprise.inject.Any;
 import javax.enterprise.inject.spi.Bean;
 import javax.enterprise.inject.spi.BeanManager;
 import javax.enterprise.inject.spi.InjectionTarget;
@@ -15,8 +16,10 @@ import org.jboss.as.ee.component.EEClassIntrospector;
 import org.jboss.as.naming.ManagedReference;
 import org.jboss.as.naming.ManagedReferenceFactory;
 import org.jboss.as.server.deployment.DeploymentUnit;
+import org.jboss.as.weld.WeldStartService;
 import org.jboss.as.weld.injection.InjectionTargets;
 import org.jboss.as.weld.services.BeanManagerService;
+import org.jboss.as.weld.util.Utils;
 import org.jboss.msc.service.Service;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceTarget;
@@ -25,7 +28,6 @@ import org.jboss.msc.service.StartException;
 import org.jboss.msc.service.StopContext;
 import org.jboss.msc.value.InjectedValue;
 import org.jboss.weld.bean.builtin.BeanManagerProxy;
-import org.jboss.weld.literal.AnyLiteral;
 import org.jboss.weld.manager.BeanManagerImpl;
 
 /**
@@ -43,6 +45,7 @@ public class WeldClassIntrospector implements EEClassIntrospector, Service<EECla
         final WeldClassIntrospector introspector = new WeldClassIntrospector();
         serviceTarget.addService(serviceName(deploymentUnit), introspector)
                 .addDependency(BeanManagerService.serviceName(deploymentUnit), BeanManager.class, introspector.beanManager)
+                .addDependency(Utils.getRootDeploymentUnit(deploymentUnit).getServiceName().append(WeldStartService.SERVICE_NAME))
                 .install();
     }
 
@@ -74,7 +77,7 @@ public class WeldClassIntrospector implements EEClassIntrospector, Service<EECla
         }
         final BeanManagerImpl beanManager = BeanManagerProxy.unwrap(this.beanManager.getValue());
         Bean<?> bean = null;
-        Set<Bean<?>> beans = new HashSet<>(beanManager.getBeans(clazz, AnyLiteral.INSTANCE));
+        Set<Bean<?>> beans = new HashSet<>(beanManager.getBeans(clazz, Any.Literal.INSTANCE));
         Iterator<Bean<?>> it = beans.iterator();
         //we may have resolved some sub-classes
         //go through and remove them from the bean set

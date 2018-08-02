@@ -22,18 +22,19 @@
 
 package org.wildfly.clustering.server.singleton;
 
-import java.util.AbstractMap;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
+import java.util.function.Supplier;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CompletionStage;
 
 import org.jboss.msc.service.Service;
 import org.jboss.msc.service.StartContext;
 import org.jboss.msc.service.StopContext;
 import org.wildfly.clustering.dispatcher.CommandDispatcherException;
-import org.wildfly.clustering.dispatcher.CommandResponse;
 import org.wildfly.clustering.group.Node;
 import org.wildfly.clustering.server.logging.ClusteringServerLogger;
 
@@ -41,37 +42,51 @@ import org.wildfly.clustering.server.logging.ClusteringServerLogger;
  * Service that proxies the value from the primary node.
  * @author Paul Ferraro
  */
+@Deprecated
 public class PrimaryProxyService<T> implements Service<T> {
 
-    private final PrimaryProxyContext<T> context;
+    private final Supplier<PrimaryProxyContext<T>> contextFactory;
 
     private volatile boolean started = false;
 
-    public PrimaryProxyService(PrimaryProxyContext<T> context) {
-        this.context = context;
+    public PrimaryProxyService(Supplier<PrimaryProxyContext<T>> contextFactory) {
+        this.contextFactory = contextFactory;
     }
 
     @Override
     public T getValue() {
+        PrimaryProxyContext<T> context = this.contextFactory.get();
         if (!this.started) {
-            throw ClusteringServerLogger.ROOT_LOGGER.notStarted(this.context.getServiceName().getCanonicalName());
+            throw ClusteringServerLogger.ROOT_LOGGER.notStarted(context.getServiceName().getCanonicalName());
         }
         try {
-            Map<Node, CommandResponse<Optional<T>>> responses = this.context.getCommandDispatcher().executeOnCluster(new SingletonValueCommand<T>());
+            Map<Node, CompletionStage<Optional<T>>> responses = context.getCommandDispatcher().executeOnGroup(new SingletonValueCommand<>());
             // Prune non-primary (i.e. null) results
-            List<Map.Entry<Node, Optional<T>>> result = responses.entrySet().stream().map(entry -> {
-                try {
-                    return new AbstractMap.SimpleImmutableEntry<>(entry.getKey(), entry.getValue().get());
-                } catch (ExecutionException e) {
-                    throw new IllegalArgumentException(e);
+            Map<Node, Optional<T>> results = new HashMap<>();
+            try {
+                for (Map.Entry<Node, CompletionStage<Optional<T>>> entry : responses.entrySet()) {
+                    try {
+                        Optional<T> response = entry.getValue().toCompletableFuture().join();
+                        if (response != null) {
+                            results.put(entry.getKey(), response);
+                        }
+                    } catch (CancellationException e) {
+                        // Ignore
+                    }
                 }
-            }).filter(entry -> entry.getValue() != null).collect(Collectors.toList());
-            // We expect only 1 result
-            if (result.size() > 1) {
-                // This would mean there are multiple primary nodes!
-                throw ClusteringServerLogger.ROOT_LOGGER.multiplePrimaryProvidersDetected(this.context.getServiceName().getCanonicalName(), result.stream().map(Map.Entry::getKey).collect(Collectors.toList()));
+            } catch (CompletionException e) {
+                throw new IllegalArgumentException(e);
             }
-            return result.stream().findFirst().orElseThrow(() -> ClusteringServerLogger.ROOT_LOGGER.noResponseFromMaster(this.context.getServiceName().getCanonicalName())).getValue().orElse(null);
+            // We expect only 1 result
+            if (results.size() > 1) {
+                // This would mean there are multiple primary nodes!
+                throw ClusteringServerLogger.ROOT_LOGGER.multiplePrimaryProvidersDetected(context.getServiceName().getCanonicalName(), results.keySet());
+            }
+            Iterator<Optional<T>> values = results.values().iterator();
+            if (!values.hasNext()) {
+                throw ClusteringServerLogger.ROOT_LOGGER.noResponseFromMaster(context.getServiceName().getCanonicalName());
+            }
+            return values.next().orElse(null);
         } catch (CommandDispatcherException e) {
             throw new IllegalArgumentException(e);
         }

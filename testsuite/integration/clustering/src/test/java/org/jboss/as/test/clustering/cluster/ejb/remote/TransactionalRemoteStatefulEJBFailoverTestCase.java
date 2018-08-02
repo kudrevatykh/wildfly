@@ -28,10 +28,9 @@ import javax.ejb.NoSuchEJBException;
 import javax.transaction.UserTransaction;
 
 import org.jboss.arquillian.container.test.api.Deployment;
-import org.jboss.arquillian.container.test.api.RunAsClient;
 import org.jboss.arquillian.container.test.api.TargetsContainer;
 import org.jboss.arquillian.junit.Arquillian;
-import org.jboss.as.test.clustering.cluster.ClusterAbstractTestCase;
+import org.jboss.as.test.clustering.cluster.AbstractClusteringTestCase;
 import org.jboss.as.test.clustering.cluster.ejb.remote.bean.Incrementor;
 import org.jboss.as.test.clustering.cluster.ejb.remote.bean.IncrementorBean;
 import org.jboss.as.test.clustering.cluster.ejb.remote.bean.Result;
@@ -52,18 +51,17 @@ import org.junit.runner.RunWith;
  * @author Paul Ferraro
  */
 @RunWith(Arquillian.class)
-@RunAsClient
-public class TransactionalRemoteStatefulEJBFailoverTestCase extends ClusterAbstractTestCase {
-    private static final String MODULE_NAME = "transactional-remote-stateful-ejb-failover-test";
+public class TransactionalRemoteStatefulEJBFailoverTestCase extends AbstractClusteringTestCase {
+    private static final String MODULE_NAME = TransactionalRemoteStatefulEJBFailoverTestCase.class.getSimpleName();
 
     @Deployment(name = DEPLOYMENT_1, managed = false, testable = false)
-    @TargetsContainer(CONTAINER_1)
+    @TargetsContainer(NODE_1)
     public static Archive<?> createDeploymentForContainer1() {
         return createDeployment();
     }
 
     @Deployment(name = DEPLOYMENT_2, managed = false, testable = false)
-    @TargetsContainer(CONTAINER_2)
+    @TargetsContainer(NODE_2)
     public static Archive<?> createDeploymentForContainer2() {
         return createDeployment();
     }

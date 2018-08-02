@@ -38,6 +38,7 @@ import org.jboss.as.controller.StringListAttributeDefinition;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.wildfly.extension.messaging.activemq.CommonAttributes;
+import org.wildfly.extension.messaging.activemq.InfiniteOrPositiveValidators;
 
 /**
  * @author <a href="http://jmesnil.net/">Jeff Mesnil</a> (c) 2014 Red Hat inc.
@@ -62,6 +63,8 @@ public class HAAttributes {
             .setDefaultValue(new ModelNode(ActiveMQDefaultConfiguration.getDefaultHapolicyBackupRequestRetries()))
             .setRequired(false)
             .setAllowExpression(true)
+            .setCorrector(InfiniteOrPositiveValidators.NEGATIVE_VALUE_CORRECTOR)
+            .setValidator(InfiniteOrPositiveValidators.INT_INSTANCE)
             .setRestartAllServices()
             .build();
 
@@ -74,20 +77,20 @@ public class HAAttributes {
             .build();
 
     // WFLY-8256 change default value to true instead of Artemis's false
-    public static SimpleAttributeDefinition CHECK_FOR_LIVE_SERVER = create(CommonAttributes.CHECK_FOR_LIVE_SERVER2, BOOLEAN)
+    public static final SimpleAttributeDefinition CHECK_FOR_LIVE_SERVER = create(CommonAttributes.CHECK_FOR_LIVE_SERVER2, BOOLEAN)
             .setDefaultValue(new ModelNode(true))
             .setRequired(false)
             .setAllowExpression(true)
             .setRestartAllServices()
             .build();
 
-    public static SimpleAttributeDefinition CLUSTER_NAME = SimpleAttributeDefinitionBuilder.create(CommonAttributes.CLUSTER_NAME, STRING)
+    public static final SimpleAttributeDefinition CLUSTER_NAME = SimpleAttributeDefinitionBuilder.create(CommonAttributes.CLUSTER_NAME, STRING)
             .setRequired(false)
             .setAllowExpression(true)
             .setRestartAllServices()
             .build();
 
-    public static StringListAttributeDefinition EXCLUDED_CONNECTORS = new StringListAttributeDefinition.Builder("excluded-connectors")
+    public static final StringListAttributeDefinition EXCLUDED_CONNECTORS = new StringListAttributeDefinition.Builder("excluded-connectors")
             .setRequired(false)
             .setAttributeMarshaller(AttributeMarshaller.STRING_LIST)
             .setAttributeParser(AttributeParser.STRING_LIST)
@@ -101,7 +104,7 @@ public class HAAttributes {
             .setRestartAllServices()
             .build();
 
-    public static SimpleAttributeDefinition GROUP_NAME = SimpleAttributeDefinitionBuilder.create(CommonAttributes.GROUP_NAME, STRING)
+    public static final SimpleAttributeDefinition GROUP_NAME = SimpleAttributeDefinitionBuilder.create(CommonAttributes.GROUP_NAME, STRING)
             .setRequired(false)
             .setAllowExpression(true)
             .setRestartAllServices()

@@ -55,7 +55,6 @@ import org.jboss.as.controller.security.CredentialReference;
 import org.jboss.as.naming.deployment.ContextNames;
 import org.jboss.as.naming.service.NamingService;
 import org.jboss.as.network.SocketBinding;
-import org.jboss.as.security.service.SecurityBootstrapService;
 import org.jboss.as.server.Services;
 import org.jboss.as.txn.service.TxnServices;
 import org.jboss.dmr.ModelNode;
@@ -121,8 +120,8 @@ import org.jboss.msc.value.InjectedValue;
 import org.wildfly.common.function.ExceptionSupplier;
 import org.wildfly.extension.messaging.activemq.ActiveMQActivationService;
 import org.wildfly.extension.messaging.activemq.ActiveMQResourceAdapter;
-import org.wildfly.extension.messaging.activemq.JGroupsBroadcastEndpointFactory;
 import org.wildfly.extension.messaging.activemq.MessagingServices;
+import org.wildfly.extension.messaging.activemq.broadcast.CommandDispatcherBroadcastEndpointFactory;
 import org.wildfly.extension.messaging.activemq.logging.MessagingLogger;
 import org.wildfly.security.credential.PasswordCredential;
 import org.wildfly.security.credential.source.CredentialSource;
@@ -319,9 +318,6 @@ public class PooledConnectionFactoryService implements Service<Void> {
                 .addDependency(JMSServices.getJmsManagerBaseServiceName(serverServiceName))
                 // ensures that Artemis client thread pools are not stopped before any deployment depending on a pooled-connection-factory
                 .addDependency(MessagingServices.ACTIVEMQ_CLIENT_THREAD_POOL)
-                // WFLY-6652 this dependency ensures that Artemis will be able to destroy any queues created on behalf of a
-                // pooled-connection-factory client during server stop
-                .addDependency(SecurityBootstrapService.SERVICE_NAME)
                 .setInitialMode(ServiceController.Mode.PASSIVE);
         return serviceBuilder;
     }
@@ -396,7 +392,7 @@ public class PooledConnectionFactoryService implements Service<Void> {
                     properties.add(simpleProperty15(GROUP_ADDRESS, STRING_TYPE, udpCfg.getGroupAddress()));
                     properties.add(simpleProperty15(GROUP_PORT, INTEGER_TYPE, "" + udpCfg.getGroupPort()));
                     properties.add(simpleProperty15(DISCOVERY_LOCAL_BIND_ADDRESS, STRING_TYPE, "" + udpCfg.getLocalBindAddress()));
-                } else if (bgCfg instanceof JGroupsBroadcastEndpointFactory) {
+                } else if (bgCfg instanceof CommandDispatcherBroadcastEndpointFactory) {
                     properties.add(simpleProperty15(JGROUPS_CHANNEL_NAME, STRING_TYPE, jgroupsChannelName));
                     properties.add(simpleProperty15(JGROUPS_CHANNEL_REF_NAME, STRING_TYPE, serverName + "/discovery" + discoveryGroupConfiguration.getName()));
 
@@ -481,7 +477,7 @@ public class PooledConnectionFactoryService implements Service<Void> {
                     .addDependency(ConnectorServices.BOOTSTRAP_CONTEXT_SERVICE.append("default"))
                     .setInitialMode(ServiceController.Mode.PASSIVE).install();
 
-            createJNDIAliases(bindInfo, jndiAliases, controller);
+            createJNDIAliases(bindInfo, jndiAliases, controller, serviceTarget);
 
             // Mock the deployment service to allow it to start
             serviceTarget.addService(ConnectorServices.RESOURCE_ADAPTER_DEPLOYER_SERVICE_PREFIX.append(name), Service.NULL).install();
@@ -515,11 +511,11 @@ public class PooledConnectionFactoryService implements Service<Void> {
         }
     }
 
-    private void createJNDIAliases(final BindInfo bindInfo, List<String> aliases, ServiceController<ResourceAdapterDeployment> controller) {
+    private void createJNDIAliases(final BindInfo bindInfo, List<String> aliases, ServiceController<ResourceAdapterDeployment> controller, ServiceTarget serviceTarget) {
         for (final String alias : aliases) {
             // do not install the alias' binder service if it is already registered
             if (controller.getServiceContainer().getService(ContextNames.bindInfoFor(alias).getBinderServiceName()) == null) {
-                installAliasBinderService(controller.getServiceContainer(),
+                installAliasBinderService(serviceTarget,
                         bindInfo,
                         alias);
             }

@@ -98,7 +98,9 @@ public class WebParsingDeploymentProcessor implements DeploymentUnitProcessor {
                     if (schemaValidation && webMetaData.getSchemaLocation() != null) {
                         XMLSchemaValidator validator = new XMLSchemaValidator(new XMLResourceResolver());
                         InputStream xmlInput = webXml.openStream();
+                        ClassLoader oldCl = Thread.currentThread().getContextClassLoader();
                         try {
+                            Thread.currentThread().setContextClassLoader(WebMetaDataParser.class.getClassLoader());
                             if (webMetaData.is23())
                                 validator.validate("-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN", xmlInput);
                             else if (webMetaData.is24())
@@ -109,12 +111,15 @@ public class WebParsingDeploymentProcessor implements DeploymentUnitProcessor {
                                 validator.validate("http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd", xmlInput);
                             else if (webMetaData.is31())
                                 validator.validate("http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd", xmlInput);
+                            else if (webMetaData.getVersion() != null && webMetaData.getVersion().equals("4.0"))
+                                validator.validate("http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd", xmlInput);
                             else
                                 validator.validate("-//Sun Microsystems, Inc.//DTD Web Application 2.2//EN", xmlInput);
                         } catch (SAXException e) {
                             throw new DeploymentUnitProcessingException("Failed to validate " + webXml, e);
                         } finally {
                             xmlInput.close();
+                            Thread.currentThread().setContextClassLoader(oldCl);
                         }
                     }
                     warMetaData.setWebMetaData(webMetaData);

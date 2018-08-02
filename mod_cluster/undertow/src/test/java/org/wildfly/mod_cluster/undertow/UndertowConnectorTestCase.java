@@ -27,11 +27,9 @@ import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
 import java.net.InetAddress;
-import java.net.NetworkInterface;
 import java.net.UnknownHostException;
 import java.util.Collections;
 
-import org.jboss.as.network.ClientMapping;
 import org.jboss.as.network.NetworkInterfaceBinding;
 import org.jboss.as.network.SocketBinding;
 import org.jboss.as.network.SocketBindingManager;
@@ -51,16 +49,16 @@ public class UndertowConnectorTestCase {
     public void getType() {
         OptionMap options = OptionMap.builder().getMap();
         assertSame(Connector.Type.AJP, new UndertowConnector(new AjpListenerService("", "", options, OptionMap.EMPTY)).getType());
-        assertSame(Connector.Type.HTTP, new UndertowConnector(new HttpListenerService("", "", options, OptionMap.EMPTY, false, false)).getType());
-        assertSame(Connector.Type.HTTPS, new UndertowConnector(new HttpsListenerService("", "", options, null, OptionMap.EMPTY)).getType());
+        assertSame(Connector.Type.HTTP, new UndertowConnector(new HttpListenerService("", "", options, OptionMap.EMPTY, false, false, false)).getType());
+        assertSame(Connector.Type.HTTPS, new UndertowConnector(new HttpsListenerService("", "", options, null, OptionMap.EMPTY, false)).getType());
     }
 
     @Test
     public void getAddress() throws UnknownHostException {
         InetAddress expected = InetAddress.getLocalHost();
-        NetworkInterfaceBinding interfaceBinding = new NetworkInterfaceBinding(Collections.<NetworkInterface>emptySet(), expected);
+        NetworkInterfaceBinding interfaceBinding = new NetworkInterfaceBinding(Collections.emptySet(), expected);
         SocketBindingManager bindingManager = mock(SocketBindingManager.class);
-        SocketBinding binding = new SocketBinding("socket", 1, true, null, 0, interfaceBinding, bindingManager, Collections.<ClientMapping>emptyList());
+        SocketBinding binding = new SocketBinding("socket", 1, true, null, 0, interfaceBinding, bindingManager, Collections.emptyList());
 
         when(this.listener.getSocketBinding()).thenReturn(binding);
 
@@ -72,9 +70,9 @@ public class UndertowConnectorTestCase {
     @Test
     public void getPort() throws UnknownHostException {
         int expected = 10;
-        NetworkInterfaceBinding interfaceBinding = new NetworkInterfaceBinding(Collections.<NetworkInterface>emptySet(), InetAddress.getLocalHost());
+        NetworkInterfaceBinding interfaceBinding = new NetworkInterfaceBinding(Collections.emptySet(), InetAddress.getLocalHost());
         SocketBindingManager bindingManager = mock(SocketBindingManager.class);
-        SocketBinding binding = new SocketBinding("socket", expected, true, null, 0, interfaceBinding, bindingManager, Collections.<ClientMapping>emptyList());
+        SocketBinding binding = new SocketBinding("socket", expected, true, null, 0, interfaceBinding, bindingManager, Collections.emptyList());
 
         when(this.listener.getSocketBinding()).thenReturn(binding);
 

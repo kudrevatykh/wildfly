@@ -90,6 +90,8 @@ public class PersistenceUnitXmlParser extends MetaDataElementParser {
                 version = Version.JPA_2_0;
             } else if ("2.1".equals(versionString)) {
                 version = Version.JPA_2_1;
+            } else if ("2.2".equals(versionString)) {
+                version = Version.JPA_2_2;
             } else if ("2".equals(versionString)) {
                 version = Version.JPA_2_0;
             } else {
@@ -160,8 +162,10 @@ public class PersistenceUnitXmlParser extends MetaDataElementParser {
             pu.setPersistenceXMLSchemaVersion("1.0");
         } else if (version.equals(Version.JPA_2_0)) {
             pu.setPersistenceXMLSchemaVersion("2.0");
-        } else {
+        } else if (version.equals(Version.JPA_2_1)) {
             pu.setPersistenceXMLSchemaVersion("2.1");
+        } else {
+            pu.setPersistenceXMLSchemaVersion("2.2");
         }
 
         final int count = reader.getAttributeCount();
