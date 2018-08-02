@@ -25,6 +25,7 @@ import static org.jboss.as.weld.util.Utils.putIfValueNotNull;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -293,18 +294,20 @@ public class WeldDeploymentProcessor implements DeploymentUnitProcessor {
         ServiceBuilder<WeldStartCompletionService> weldStartCompletionServiceBuilder = serviceTarget
                 .addService(weldStartCompletionServiceName, weldStartCompletionService)
                 .addDependency(weldBootstrapServiceName, WeldBootstrapService.class, weldStartCompletionService.getBootstrap())
-                .addDependency(weldStartServiceName).addDependencies(getComponentStartServiceNames(deploymentUnit));
+                .addDependency(weldStartServiceName);
+        getComponentStartServiceNames(deploymentUnit).entrySet().forEach(e->weldStartCompletionServiceBuilder.addDependencies(e.getKey(), e.getValue()));
         for (DeploymentUnit sub : subDeployments) {
-            weldStartCompletionServiceBuilder.addDependencies(getComponentStartServiceNames(sub));
+            getComponentStartServiceNames(sub).entrySet().forEach(e->weldStartCompletionServiceBuilder.addDependencies(e.getKey(), e.getValue()));
         }
         weldStartCompletionServiceBuilder.install();
     }
 
-    private List<ServiceName> getComponentStartServiceNames(DeploymentUnit deploymentUnit) {
-        List<ServiceName> dependencies = new ArrayList<>();
+    private Map<ServiceBuilder.DependencyType, List<ServiceName>> getComponentStartServiceNames(DeploymentUnit deploymentUnit) {
+        Map<ServiceBuilder.DependencyType, List<ServiceName>> dependencies = new EnumMap<>(ServiceBuilder.DependencyType.class);
         final EEModuleDescription eeModuleDescription = deploymentUnit.getAttachment(org.jboss.as.ee.component.Attachments.EE_MODULE_DESCRIPTION);
         for (ComponentDescription component : eeModuleDescription.getComponentDescriptions()) {
-            dependencies.add(component.getStartServiceName());
+            ServiceBuilder.DependencyType type = component.isOptional()?ServiceBuilder.DependencyType.OPTIONAL:ServiceBuilder.DependencyType.REQUIRED;
+            dependencies.computeIfAbsent(type, t->new ArrayList<>()).add(component.getStartServiceName());
         }
         return dependencies;
     }
@@ -321,9 +324,9 @@ public class WeldDeploymentProcessor implements DeploymentUnitProcessor {
     private void installBootstrapConfigurationService(WeldDeployment deployment, DeploymentUnit parentDeploymentUnit) {
         final boolean nonPortableMode = parentDeploymentUnit.getAttachment(WeldConfiguration.ATTACHMENT_KEY).isNonPortableMode();
         final ExternalConfiguration configuration = new ExternalConfigurationBuilder()
-            .add(ConfigurationKey.NON_PORTABLE_MODE.get(), nonPortableMode)
-            .add(ConfigurationKey.ALLOW_OPTIMIZED_CLEANUP.get(), true)
-            .build();
+                .add(ConfigurationKey.NON_PORTABLE_MODE.get(), nonPortableMode)
+                .add(ConfigurationKey.ALLOW_OPTIMIZED_CLEANUP.get(), true)
+                .build();
         deployment.getServices().add(ExternalConfiguration.class, configuration);
     }
 
